@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Briefcase, CheckCircle, ArrowRight } from 'lucide-react';
+import { User, Heart, CheckCircle, ArrowRight } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 
 interface RoleOption {
-  id: 'client' | 'professional';
+  id: 'user' | 'companion';
   title: string;
   description: string;
   icon: React.ReactNode;
@@ -16,44 +16,44 @@ interface RoleOption {
 
 const roleOptions: RoleOption[] = [
   {
-    id: 'client',
-    title: 'Soy Cliente',
-    description: 'Busco profesionales para cuidar a mis seres queridos',
+    id: 'user',
+    title: 'Soy Usuario',
+    description: 'Busco acompañantes virtuales para charlar y compartir momentos especiales',
     icon: <User className="w-8 h-8" />,
     features: [
-      'Publicar ofertas de trabajo',
-      'Encontrar profesionales verificados',
-      'Gestionar pagos seguros',
-      'Recibir notificaciones en tiempo real'
+      'Reservar sesiones de video o chat',
+      'Encontrar acompañantes verificados',
+      'Gestionar balance con criptomonedas',
+      'Recibir acompañamiento virtual'
     ],
     color: 'bg-blue-50 border-blue-200 hover:bg-blue-100'
   },
   {
-    id: 'professional',
-    title: 'Soy Profesional',
-    description: 'Ofrezco servicios de cuidado profesional',
-    icon: <Briefcase className="w-8 h-8" />,
+    id: 'companion',
+    title: 'Soy Acompañante',
+    description: 'Ofrezco acompañamiento virtual y conversaciones significativas',
+    icon: <Heart className="w-8 h-8" />,
     features: [
-      'Encontrar oportunidades de trabajo',
-      'Mostrar tu experiencia y habilidades',
-      'Recibir pagos por tus servicios',
+      'Recibir solicitudes de sesiones',
+      'Mostrar tu experiencia y especialidades',
+      'Ganar dinero por tus servicios',
       'Construir tu reputación'
     ],
-    color: 'bg-green-50 border-green-200 hover:bg-green-100'
+    color: 'bg-pink-50 border-pink-200 hover:bg-pink-100'
   }
 ];
 
 interface RoleSelectionProps {
-  onRoleSelect?: (role: 'client' | 'professional') => void;
+  onRoleSelect?: (role: 'user' | 'companion') => void;
 }
 
 export default function RoleSelection({ onRoleSelect }: RoleSelectionProps) {
-  const [selectedRole, setSelectedRole] = useState<'client' | 'professional' | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'user' | 'companion' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { showError, showLoading, dismissLoading } = useNotifications();
 
-  const handleRoleSelection = async (role: 'client' | 'professional') => {
+  const handleRoleSelection = async (role: 'user' | 'companion') => {
     console.log('=== RoleSelection: Iniciando selección de rol ===');
     console.log('Rol seleccionado:', role);
 
@@ -97,7 +97,7 @@ export default function RoleSelection({ onRoleSelect }: RoleSelectionProps) {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            ¡Bienvenido a ElderCare!
+            ¡Bienvenido a TalkMe!
           </h1>
           <p className="text-gray-700">
             Para personalizar tu experiencia, necesitamos saber cómo planeas usar nuestra plataforma
@@ -125,7 +125,7 @@ export default function RoleSelection({ onRoleSelect }: RoleSelectionProps) {
 
               {/* Icon and Title */}
               <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                <div className={`w-12 h-12 ${option.id === 'user' ? 'bg-blue-100' : 'bg-pink-100'} rounded-lg flex items-center justify-center mr-4`}>
                   {option.icon}
                 </div>
                 <div>

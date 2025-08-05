@@ -57,6 +57,15 @@ export default {
     },
     {
       method: 'POST',
+      path: '/sessions/:id/reject',
+      handler: 'session.reject',
+      config: {
+        policies: [],
+        middlewares: [],
+      },
+    },
+    {
+      method: 'POST',
       path: '/sessions/:id/start',
       handler: 'session.start',
       config: {

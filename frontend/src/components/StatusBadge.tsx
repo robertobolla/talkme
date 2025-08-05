@@ -1,8 +1,8 @@
 import React from 'react';
-import { CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, AlertCircle, PlayCircle, PauseCircle } from 'lucide-react';
 
 interface StatusBadgeProps {
-  status: 'published' | 'accepted' | 'cancelled' | 'completed';
+  status: 'published' | 'accepted' | 'cancelled' | 'completed' | 'pending' | 'confirmed' | 'in_progress';
   className?: string;
 }
 
@@ -31,6 +31,24 @@ export default function StatusBadge({ status, className = '' }: StatusBadgeProps
       text: 'Completada',
       classes: 'bg-purple-100 text-purple-800 border-purple-200',
       iconClasses: 'text-purple-600'
+    },
+    pending: {
+      icon: Clock,
+      text: 'Pendiente',
+      classes: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      iconClasses: 'text-yellow-600'
+    },
+    confirmed: {
+      icon: CheckCircle,
+      text: 'Confirmada',
+      classes: 'bg-blue-100 text-blue-800 border-blue-200',
+      iconClasses: 'text-blue-600'
+    },
+    in_progress: {
+      icon: PlayCircle,
+      text: 'En Progreso',
+      classes: 'bg-green-100 text-green-800 border-green-200',
+      iconClasses: 'text-green-600'
     }
   };
 

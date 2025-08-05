@@ -11,7 +11,7 @@ export default function OnboardingPage() {
   const { isLoaded, user } = useUser();
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<'role-selection' | 'profile-form'>('role-selection');
-  const [selectedRole, setSelectedRole] = useState<'client' | 'professional' | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'user' | 'companion' | null>(null);
   const { showError, showSuccess, showLoading, dismissLoading } = useNotifications();
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export default function OnboardingPage() {
     checkExistingProfile();
   }, [isLoaded, user, router]);
 
-  const handleRoleSelection = async (role: 'client' | 'professional') => {
+  const handleRoleSelection = async (role: 'user' | 'companion') => {
     const loadingToast = showLoading('Seleccionando rol...');
 
     try {
@@ -98,81 +98,53 @@ export default function OnboardingPage() {
       } else {
         console.log('OnboardingPage: Error en la respuesta, status:', response.status);
 
-        // Intentar obtener el error de forma segura
-        let errorMessage = 'Error al seleccionar rol';
-
+        let errorMessage = 'Error al seleccionar el rol';
         try {
           const errorData = await response.json();
-          console.log('OnboardingPage: Error data (JSON):', errorData);
-
-          // Manejar diferentes formatos de error
-          if (errorData.error && typeof errorData.error === 'object') {
-            errorMessage = errorData.error.message || errorMessage;
-          } else if (errorData.error && typeof errorData.error === 'string') {
-            errorMessage = errorData.error;
-          } else if (errorData.message) {
-            errorMessage = errorData.message;
-          }
+          errorMessage = errorData.error || errorData.message || errorMessage;
         } catch (parseError) {
-          console.log('OnboardingPage: No se pudo parsear el error como JSON');
-          try {
-            const textError = await response.text();
-            console.log('OnboardingPage: Error data (text):', textError);
-            errorMessage = textError || errorMessage;
-          } catch (textError) {
-            console.log('OnboardingPage: No se pudo leer el texto del error');
-          }
+          console.error('Error parsing error response:', parseError);
         }
 
-        console.log('OnboardingPage: Error final:', errorMessage);
+        console.error('OnboardingPage: Error message:', errorMessage);
         dismissLoading(loadingToast);
         showError(errorMessage);
       }
     } catch (error) {
-      console.error('OnboardingPage: Error in role selection:', error);
+      console.error('OnboardingPage: Error en handleRoleSelection:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error al seleccionar el rol';
       dismissLoading(loadingToast);
-      showError('Error al seleccionar rol. Inténtalo de nuevo.');
+      showError(errorMessage);
     }
   };
 
   const handleProfileComplete = () => {
+    console.log('OnboardingPage: Perfil completado, redirigiendo al dashboard');
     router.push('/dashboard');
   };
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando...</p>
         </div>
       </div>
     );
   }
 
   if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Redirigiendo...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="pt-16 min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentStep === 'role-selection' ? (
-          <RoleSelection onRoleSelect={handleRoleSelection} />
-        ) : (
-          <ProfileForm
-            role={selectedRole!}
-            onComplete={handleProfileComplete}
-          />
-        )}
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {currentStep === 'role-selection' ? (
+        <RoleSelection onRoleSelect={handleRoleSelection} />
+      ) : (
+        <ProfileForm onComplete={handleProfileComplete} selectedRole={selectedRole} />
+      )}
     </div>
   );
 } 

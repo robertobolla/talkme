@@ -4,7 +4,13 @@ export default clerkMiddleware((auth, req) => {
     const { pathname } = req.nextUrl;
 
     // Rutas públicas que no requieren autenticación
-    const publicRoutes = ["/", "/api/status"];
+    const publicRoutes = [
+        "/", 
+        "/api/status",
+        "/api/sessions",
+        "/api/companions",
+        "/api/onboarding"
+    ];
 
     // Si es una ruta pública, permitir acceso
     if (publicRoutes.some(route => pathname.startsWith(route))) {

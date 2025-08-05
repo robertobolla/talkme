@@ -1,119 +1,232 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import {
-  Plus,
-  Users,
-  Clock,
-  DollarSign,
-  TrendingUp,
   Calendar,
+  Clock,
+  Users,
+  DollarSign,
+  Heart,
+  MessageCircle,
+  Video,
   Star,
-  MapPin
+  Plus,
+  Search,
+  XCircle
 } from 'lucide-react';
-import { useNotifications } from '@/hooks/useNotifications';
-import LoadingSpinner from '@/components/LoadingSpinner';
-import EmptyState from '@/components/EmptyState';
-import StatusBadge from '@/components/StatusBadge';
 import StatsCard from '@/components/StatsCard';
-import { isOfferOpenForApplications, getTimeUntilApplicationsClose } from '@/lib/dateUtils';
+import StatusBadge from '@/components/StatusBadge';
+import SessionBooking from '@/components/SessionBooking';
+import CompanionNotifications from '@/components/CompanionNotifications';
+import CompanionAgenda from '@/components/CompanionAgenda';
+import SessionCountdown from '@/components/SessionCountdown';
+import SessionReadyModal from '@/components/SessionReadyModal';
+import VideoChatWindow from '@/components/VideoChatWindow';
+import { useNotifications } from '@/hooks/useNotifications';
+import { useSessionReady } from '@/hooks/useSessionReady';
 
 interface UserProfile {
   id: number;
-  role: 'client' | 'professional';
   fullName: string;
   email: string;
-  hourlyRate?: number;
-  totalOffers?: number;
-  completedJobs?: number;
-  averageRating?: number;
-  totalEarnings?: number;
-  reviewsReceived?: any[];
+  role: 'user' | 'companion';
+  balance: number;
+  totalEarnings: number;
+  averageRating: number;
+  hourlyRate?: number; // Added for companion hourly rate
+  status: string;
+  isOnline?: boolean; // Added for companion status
 }
 
-interface Offer {
+interface Session {
   id: number;
   title: string;
   description: string;
-  location: string;
-  dateTime: string;
+  startTime: string;
+  endTime: string;
   duration: number;
-  status: string;
-
-  applicants?: any[];
-  hasApplied?: boolean;
-  professional?: {
-    id: number;
-    fullName: string;
-    hourlyRate: number;
-  };
-  client?: {
+  price: number;
+  status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  sessionType: 'video' | 'chat';
+  companion?: {
     id: number;
     fullName: string;
   };
-  attributes?: {
-    applicants?: any[];
-    client?: {
-      id: number;
-      fullName: string;
-    };
+  user?: {
+    id: number;
+    fullName: string;
   };
 }
 
-export default function DashboardPage() {
-  const { user, isLoaded } = useUser();
+interface Companion {
+  id: number;
+  fullName: string;
+  hourlyRate: number;
+  specialties: string[];
+  languages: string[];
+  bio: string;
+  averageRating: number;
+}
+
+export default function Dashboard() {
+  const { user } = useUser();
   const router = useRouter();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [companions, setCompanions] = useState<Companion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [applyingTo, setApplyingTo] = useState<number | null>(null);
-  const [cancelingFrom, setCancelingFrom] = useState<number | null>(null);
+  const [showBooking, setShowBooking] = useState(false);
+  const [bookingSession, setBookingSession] = useState<number | null>(null);
+  const [showAgenda, setShowAgenda] = useState(false);
   const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
 
+  // Session ready logic
+  const {
+    readyModalOpen,
+    videoChatOpen,
+    currentSession,
+    userReady,
+    otherPartyReady,
+    handleReady,
+    handleNotReady,
+    handleCloseReadyModal,
+    handleCloseVideoChat
+  } = useSessionReady({
+    sessions,
+    userRole: userProfile?.role || 'user',
+    userId: userProfile?.id || 0
+  });
+
   useEffect(() => {
-    if (!isLoaded || !user) return;
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
 
-    const fetchData = async () => {
-      try {
-        // Obtener perfil del usuario
-        const profileResponse = await fetch('/api/onboarding/profile-form');
-        if (profileResponse.ok) {
-          const profileData = await profileResponse.json();
-          console.log('Dashboard: Datos del perfil recibidos:', profileData);
-          console.log('Dashboard: Rol del usuario:', profileData.data?.role);
-          console.log('Dashboard: Nombre del usuario:', profileData.data?.fullName);
-          console.log('Dashboard: Datos completos del perfil:', JSON.stringify(profileData.data, null, 2));
-          setUserProfile(profileData.data);
-        }
-
-        // Obtener ofertas
-        const offersResponse = await fetch('/api/offers');
-        if (offersResponse.ok) {
-          const offersData = await offersResponse.json();
-          setOffers(offersData.offers || []);
-        }
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
+  useEffect(() => {
+    if (userProfile) {
+      fetchSessions();
+      if (userProfile.role === 'user') {
+        fetchCompanions();
       }
-    };
+    }
+  }, [userProfile]);
 
-    fetchData();
-  }, [isLoaded, user]);
+  const fetchUserProfile = async () => {
+    try {
+      console.log('Fetching user profile for email:', user?.emailAddresses[0].emailAddress);
 
-  if (!isLoaded || loading) {
+      const response = await fetch(`/api/user-profiles?filters[email][$eq]=${user?.emailAddresses[0].emailAddress}&populate=*`);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('User profile response:', data);
+
+        if (data.data && data.data.length > 0) {
+          setUserProfile(data.data[0]);
+          console.log('User profile found:', data.data[0]);
+        } else {
+          console.log('No user profile found for email:', user?.emailAddresses[0].emailAddress);
+          // Intentar buscar por clerkUserId como fallback
+          const clerkResponse = await fetch(`/api/user-profiles?filters[clerkUserId][$eq]=${user?.id}&populate=*`);
+          if (clerkResponse.ok) {
+            const clerkData = await clerkResponse.json();
+            if (clerkData.data && clerkData.data.length > 0) {
+              setUserProfile(clerkData.data[0]);
+              console.log('User profile found by clerkUserId:', clerkData.data[0]);
+            }
+          }
+        }
+      } else {
+        console.error('Error response from user-profiles API:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSessions = async () => {
+    if (!userProfile) return;
+
+    try {
+      const response = await fetch(`/api/sessions/user/${userProfile.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data);
+      }
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+    }
+  };
+
+  const fetchCompanions = async () => {
+    try {
+      const response = await fetch('/api/sessions/companions/available');
+      if (response.ok) {
+        const data = await response.json();
+        setCompanions(data);
+      }
+    } catch (error) {
+      console.error('Error fetching companions:', error);
+    }
+  };
+
+  const handleBookSession = async (companionId: number, sessionData: any) => {
+    if (!userProfile || userProfile.role !== 'user') return;
+
+    setBookingSession(companionId);
+    const loadingToast = showLoading('Reservando sesión...');
+
+    try {
+      const response = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...sessionData,
+          user: userProfile.id,
+          companion: companionId
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Sesión reservada exitosamente:', data);
+
+        dismissLoading(loadingToast);
+        showSuccess('¡Sesión reservada exitosamente! 🎉', 5000);
+
+        // Recargar datos
+        fetchSessions();
+        setBookingSession(null);
+      } else {
+        const error = await response.json();
+        dismissLoading(loadingToast);
+        showError(`Error: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating session:', error);
+      dismissLoading(loadingToast);
+      showError('Error al crear la sesión');
+    }
+  };
+
+  const handleSessionCreated = () => {
+    fetchSessions();
+    setShowBooking(false);
+  };
+
+  if (loading) {
     return (
-      <div className="pt-16 min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <LoadingSpinner
-            size="lg"
-            color="blue"
-            text="Cargando tu dashboard..."
-            className="min-h-[400px]"
-          />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando dashboard...</p>
         </div>
       </div>
     );
@@ -121,388 +234,371 @@ export default function DashboardPage() {
 
   if (!userProfile) {
     return (
-      <div className="pt-16 min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <p className="text-gray-600">No se pudo cargar el perfil</p>
-          </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">No se encontró el perfil de usuario</p>
         </div>
       </div>
     );
   }
 
-  const isClient = userProfile.role === 'client';
-  const isProfessional = userProfile.role === 'professional';
-
-  const handleApply = async (offerId: number) => {
-    if (!isProfessional) return;
-
-    setApplyingTo(offerId);
-    const loadingToast = showLoading('Postulándose a la oferta...');
-
-    try {
-      const response = await fetch('/api/offers/apply', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ offerId }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Postulación exitosa:', data);
-
-        // Actualizar el estado local para mostrar que ya se postuló
-        setOffers(prevOffers =>
-          prevOffers.map(offer =>
-            offer.id === offerId
-              ? { ...offer, hasApplied: true }
-              : offer
-          )
-        );
-
-        dismissLoading(loadingToast);
-        showSuccess('¡Postulación enviada exitosamente! 🎉', 5000);
-      } else {
-        let errorMessage = 'Error al postularse';
-        try {
-          const errorData = await response.json();
-          // Asegurar que errorMessage sea siempre un string
-          if (typeof errorData.error === 'string') {
-            errorMessage = errorData.error;
-          } else if (typeof errorData.message === 'string') {
-            errorMessage = errorData.message;
-          } else if (errorData.error && typeof errorData.error === 'object') {
-            errorMessage = errorData.error.message || errorMessage;
-          }
-        } catch (parseError) {
-          console.error('Error parsing error response:', parseError);
-        }
-        dismissLoading(loadingToast);
-        showError(errorMessage);
-      }
-    } catch (error) {
-      console.error('Error al postularse:', error);
-      dismissLoading(loadingToast);
-      showError('Error al postularse a la oferta');
-    } finally {
-      setApplyingTo(null);
-    }
-  };
-
-  const handleCancelApplication = async (offerId: number) => {
-    if (!isProfessional) return;
-
-    setCancelingFrom(offerId);
-    const loadingToast = showLoading('Cancelando postulación...');
-
-    try {
-      const response = await fetch('/api/offers/cancel-application', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ offerId }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Postulación cancelada exitosamente:', data);
-
-        // Actualizar el estado local para mostrar que ya no se postuló
-        setOffers(prevOffers =>
-          prevOffers.map(offer =>
-            offer.id === offerId
-              ? { ...offer, hasApplied: false }
-              : offer
-          )
-        );
-
-        dismissLoading(loadingToast);
-        showSuccess('¡Postulación cancelada exitosamente! ✅', 4000);
-      } else {
-        let errorMessage = 'Error al cancelar la postulación';
-        try {
-          const errorData = await response.json();
-          if (typeof errorData.error === 'string') {
-            errorMessage = errorData.error;
-          } else if (typeof errorData.message === 'string') {
-            errorMessage = errorData.message;
-          } else if (errorData.error && typeof errorData.error === 'object') {
-            errorMessage = errorData.error.message || errorMessage;
-          }
-        } catch (parseError) {
-          console.error('Error parsing error response:', parseError);
-        }
-        dismissLoading(loadingToast);
-        showError(errorMessage);
-      }
-    } catch (error) {
-      console.error('Error al cancelar postulación:', error);
-      dismissLoading(loadingToast);
-      showError('Error al cancelar la postulación');
-    } finally {
-      setCancelingFrom(null);
-    }
-  };
+  const stats = [
+    {
+      title: userProfile.role === 'user' ? 'Saldo Disponible' : 'Ganancias Totales',
+      value: userProfile.role === 'user' ? `$${userProfile.balance}` : `$${userProfile.totalEarnings}`,
+      icon: DollarSign,
+      color: userProfile.role === 'user' ? 'blue' : 'green',
+      subtitle: userProfile.role === 'user' ? 'Créditos para reservar sesiones' : 'Total de sesiones completadas'
+    },
+    {
+      title: 'Sesiones Activas',
+      value: sessions.filter(s => s.status === 'confirmed' || s.status === 'in_progress').length.toString(),
+      icon: Calendar,
+      color: 'purple',
+      subtitle: userProfile.role === 'user' ? 'Sesiones programadas' : 'Sesiones confirmadas'
+    },
+    {
+      title: userProfile.role === 'user' ? 'Sesiones Completadas' : 'Calificación Promedio',
+      value: userProfile.role === 'user'
+        ? sessions.filter(s => s.status === 'completed').length.toString()
+        : `${userProfile.averageRating}⭐`,
+      icon: userProfile.role === 'user' ? Clock : Star,
+      color: userProfile.role === 'user' ? 'orange' : 'yellow',
+      subtitle: userProfile.role === 'user' ? 'Historial de sesiones' : 'Basado en reseñas'
+    },
+    // Cuarta stats card solo para acompañantes
+    ...(userProfile.role === 'companion' ? [{
+      title: 'Tarifa por Hora',
+      value: `$${userProfile.hourlyRate || 0} ✏️`,
+      icon: DollarSign,
+      color: 'pink' as any,
+      subtitle: 'Haz clic para editar tu tarifa por hora',
+      onClick: () => router.push('/dashboard/edit-profile')
+    }] : [])
+  ];
 
   return (
-    <div className="pt-16 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                ¡Hola, {userProfile.fullName || user?.firstName || 'Usuario'}!
+                Bienvenido, {userProfile.fullName}
               </h1>
-
               <p className="text-gray-600 mt-2">
-                {isClient
-                  ? 'Gestiona tus ofertas y encuentra profesionales para el cuidado de tus seres queridos'
-                  : 'Encuentra oportunidades de trabajo y ayuda a familias que necesitan tu experiencia'
-                }
+                {userProfile.role === 'user' ? 'Tu espacio personal para conectar con acompañantes' : 'Tu espacio para acompañar a otros'}
               </p>
             </div>
-            <div className="flex items-center space-x-3">
-              {/* Indicador de tipo de cuenta */}
-              <div className={`px-4 py-2 rounded-full text-sm font-medium ${isClient
+
+            {/* Badge de rol */}
+            <div className="flex items-center space-x-2">
+              <div className={`px-4 py-2 rounded-full text-sm font-medium ${userProfile.role === 'user'
                 ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                : 'bg-green-100 text-green-800 border border-green-200'
+                : 'bg-pink-100 text-pink-800 border border-pink-200'
                 }`}>
-                <div className="flex items-center">
-                  <div className={`w-2 h-2 rounded-full mr-2 ${isClient ? 'bg-blue-500' : 'bg-green-500'
-                    }`}></div>
-                  {isClient ? 'Cliente' : 'Profesional'}
-                </div>
+                {userProfile.role === 'user' ? '👤 Usuario' : '💝 Acompañante'}
               </div>
 
-              {/* Botón de tareas aceptadas para profesionales */}
-              {!isClient && (
-                <button
-                  onClick={() => router.push('/dashboard/accepted-tasks')}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                >
-                  Mis Tareas Aceptadas
-                </button>
+              {/* Estado online para acompañantes */}
+              {userProfile.role === 'companion' && (
+                <div className={`px-3 py-1 rounded-full text-xs font-medium ${userProfile.isOnline
+                  ? 'bg-green-100 text-green-800 border border-green-200'
+                  : 'bg-gray-100 text-gray-800 border border-gray-200'
+                  }`}>
+                  {userProfile.isOnline ? '🟢 En línea' : '⚫ Desconectado'}
+                </div>
               )}
 
               {/* Botón de editar perfil */}
               <button
                 onClick={() => router.push('/dashboard/edit-profile')}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200 rounded-full hover:bg-gray-200 transition-colors"
               >
-                Editar Perfil
+                ✏️ Editar Perfil
               </button>
             </div>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className={`grid gap-6 mb-8 ${isClient ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'}`}>
-          <StatsCard
-            icon={isClient ? Users : DollarSign}
-            title={isClient ? 'Ofertas Creadas' : 'Precio por Hora'}
-            value={isClient ? offers.length : `$${userProfile.hourlyRate || 0}`}
-            color="blue"
-          />
-
-          <StatsCard
-            icon={Clock}
-            title={isClient ? 'Horas Contratadas' : 'Horas Trabajadas'}
-            value={userProfile.completedJobs || 0}
-            color="green"
-          />
-
-          {!isClient && (
-            <>
-              <StatsCard
-                icon={DollarSign}
-                title="Total Facturado"
-                value={`$${userProfile.totalEarnings || 0}`}
-                color="yellow"
-              />
-
-              <StatsCard
-                icon={Star}
-                title="Calificación"
-                value={`${userProfile.averageRating || 0}/5 (${(userProfile.reviewsReceived?.length || 0)} reviews)`}
-                color="purple"
-                onClick={
-                  (userProfile.reviewsReceived?.length || 0) > 0
-                    ? () => router.push(`/dashboard/reviews`)
-                    : undefined
-                }
-              />
-            </>
-          )}
+        <div className={`grid grid-cols-1 md:grid-cols-3 lg:grid-cols-${userProfile.role === 'companion' ? '4' : '3'} gap-6 mb-8`}>
+          {stats.map((stat, index) => (
+            <StatsCard
+              key={index}
+              title={stat.title}
+              value={stat.value}
+              icon={stat.icon}
+              color={stat.color as any}
+              subtitle={stat.subtitle}
+            />
+          ))}
         </div>
 
-        {/* Recent Offers Section */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {isClient ? 'Mis Ofertas' : `Ofertas Disponibles (${offers.length})`}
-              </h3>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => router.push('/dashboard/offer-history')}
-                  className="flex items-center bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
-                >
-                  Historial
-                </button>
-                {isClient && (
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - User Actions */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Session Booking for Users */}
+            {userProfile.role === 'user' && (
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-gray-800">Reservar Sesión</h2>
                   <button
-                    onClick={() => router.push('/dashboard/create-offer')}
-                    className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    onClick={() => setShowBooking(!showBooking)}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Crear Oferta
+                    {showBooking ? (
+                      <>
+                        <Search className="w-4 h-4 mr-2" />
+                        Buscar Acompañante
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Nueva Reserva
+                      </>
+                    )}
                   </button>
+                </div>
+
+                {showBooking ? (
+                  <SessionBooking
+                    companions={companions}
+                    userProfile={userProfile}
+                    onSessionCreated={handleSessionCreated}
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <Heart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">
+                      Haz clic en "Nueva Reserva" para buscar un acompañante
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Companion Agenda */}
+            {userProfile.role === 'companion' && showAgenda && (
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-gray-800">Mi Agenda</h2>
+                  <button
+                    onClick={() => setShowAgenda(false)}
+                    className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Cerrar Agenda
+                  </button>
+                </div>
+                <CompanionAgenda
+                  companionId={userProfile.id}
+                  userProfile={userProfile}
+                />
+              </div>
+            )}
+
+            {/* Sessions List */}
+            {(!showAgenda || userProfile.role === 'user') && (
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h2 className="text-xl font-semibold text-gray-800 mb-6">
+                  {userProfile.role === 'user' ? 'Mis Sesiones' : 'Historial de Sesiones'}
+                </h2>
+
+                {sessions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">
+                      {userProfile.role === 'user'
+                        ? 'No tienes sesiones programadas'
+                        : 'No has recibido solicitudes de sesión'
+                      }
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {sessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-lg text-gray-800">
+                            {session.title}
+                          </h3>
+                          <StatusBadge status={session.status} />
+                        </div>
+
+                        <div className="flex items-center text-gray-600 mb-3">
+                          <Clock className="w-4 h-4 mr-2" />
+                          <span className="text-sm">
+                            {new Date(session.startTime).toLocaleDateString()} a las{' '}
+                            {new Date(session.startTime).toLocaleTimeString()}
+                          </span>
+                        </div>
+
+                        {/* Contador para sesiones confirmadas */}
+                        {session.status === 'confirmed' && new Date(session.startTime) > new Date() && (
+                          <div className="mb-3">
+                            <SessionCountdown startTime={session.startTime} />
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            {session.sessionType === 'video' ? (
+                              <Video className="w-4 h-4 text-blue-600" />
+                            ) : (
+                              <MessageCircle className="w-4 h-4 text-green-600" />
+                            )}
+                            <span className="text-sm text-gray-600 capitalize">
+                              {session.sessionType}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-4 text-gray-600">
+                            <div className="flex items-center">
+                              <span className="text-sm">{session.duration} min</span>
+                            </div>
+                            <div className="flex items-center">
+                              <DollarSign className="w-4 h-4 mr-1" />
+                              <span className="text-sm font-medium">{session.price} USDT</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Quick Actions */}
+          <div className="space-y-6">
+            {/* Quick Actions */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                {userProfile.role === 'user' ? 'Acciones Rápidas' : 'Panel de Acompañante'}
+              </h3>
+
+              <div className="space-y-3">
+                {userProfile.role === 'user' ? (
+                  <>
+                    <button
+                      onClick={() => setShowBooking(true)}
+                      className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Reservar Sesión
+                    </button>
+
+                    <button className="w-full flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      Comprar Créditos
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowAgenda(true)}
+                      className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Ver Agenda
+                    </button>
+
+                    <button className="w-full flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      Retirar Ganancias
+                    </button>
+
+
+                  </>
                 )}
               </div>
             </div>
-          </div>
 
-          <div className="p-6">
-            {offers.length === 0 ? (
-              <EmptyState
-                icon={Calendar}
-                title={isClient ? 'No tienes ofertas creadas' : 'No hay ofertas disponibles'}
-                description={
-                  isClient
-                    ? 'Crea tu primera oferta para encontrar profesionales que te ayuden con el cuidado de tus seres queridos'
-                    : 'Las ofertas aparecerán aquí cuando estén disponibles. Mientras tanto, asegúrate de tener tu perfil completo.'
-                }
-                action={
-                  isClient
-                    ? {
-                      label: 'Crear Primera Oferta',
-                      onClick: () => router.push('/dashboard/create-offer'),
-                      variant: 'primary'
-                    }
-                    : undefined
-                }
+            {/* Notifications for Companions */}
+            {userProfile.role === 'companion' && (
+              <CompanionNotifications
+                companionId={userProfile.id}
+                onSessionConfirmed={() => {
+                  fetchSessions();
+                  showSuccess('Sesión confirmada exitosamente');
+                }}
               />
-            ) : (
-              <div className="space-y-4">
-                {offers.slice(0, 5).map((offer) => (
-                  <div key={offer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-gray-900">{offer.title}</h4>
-                          <button
-                            onClick={() => router.push(`/dashboard/offers/${offer.id}`)}
-                            className="text-blue-600 hover:text-blue-800 text-sm pr-2"
-                          >
-                            Ver Detalles
-                          </button>
-                        </div>
-                        <p className="text-gray-600 text-sm mb-2">{offer.description}</p>
-                        <div className="flex items-center space-x-4 text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <MapPin className="w-4 h-4 mr-1" />
-                            {offer.location}
-                          </div>
-                          <div className="flex items-center">
-                            <Calendar className="w-4 h-4 mr-1" />
-                            {new Date(offer.dateTime).toLocaleDateString('es-ES', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric'
-                            })}
-                          </div>
-                          <div className="flex items-center">
-                            <Clock className="w-4 h-4 mr-1" />
-                            {offer.duration}h
-                          </div>
-                          {!isClient && offer.client && (
-                            <div className="flex items-center">
-                              <Users className="w-4 h-4 mr-1" />
-                              {offer.client.fullName}
-                            </div>
-                          )}
-                          {isClient && (
-                            <div className="flex items-center">
-                              <Users className="w-4 h-4 mr-1" />
-                              {offer.attributes?.applicants?.length || offer.applicants?.length || 0} postulantes
-                            </div>
-                          )}
+            )}
+
+            {/* Available Companions (for users) */}
+            {userProfile.role === 'user' && companions.length > 0 && (
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Acompañantes Disponibles</h3>
+
+                <div className="space-y-3">
+                  {companions.slice(0, 3).map((companion) => (
+                    <div
+                      key={companion.id}
+                      className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => {
+                        setShowBooking(true);
+                        // Aquí podrías preseleccionar el acompañante
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-gray-800">{companion.fullName}</h4>
+                        <div className="flex items-center text-yellow-500">
+                          <span className="text-sm font-medium">{companion.averageRating}</span>
+                          <span className="text-sm">⭐</span>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <StatusBadge status={offer.status as any} />
 
-                        {/* Información de postulaciones */}
-                        {offer.status === 'published' && (
-                          <div className="flex items-center space-x-2">
-                            {isOfferOpenForApplications(offer.dateTime) ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Postulaciones abiertas
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                Postulaciones cerradas
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {isProfessional && offer.status === 'published' && (
-                          <button
-                            onClick={() => offer.hasApplied ? handleCancelApplication(offer.id) : handleApply(offer.id)}
-                            disabled={applyingTo === offer.id || cancelingFrom === offer.id || !isOfferOpenForApplications(offer.dateTime)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${!isOfferOpenForApplications(offer.dateTime)
-                              ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
-                              : offer.hasApplied
-                                ? cancelingFrom === offer.id
-                                  ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
-                                  : 'bg-red-100 text-red-800 hover:bg-red-200 hover:scale-105'
-                                : applyingTo === offer.id
-                                  ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
-                                  : 'bg-blue-100 text-blue-800 hover:bg-blue-200 hover:scale-105'
-                              }`}
-                          >
-                            {!isOfferOpenForApplications(offer.dateTime)
-                              ? 'Postulaciones cerradas'
-                              : offer.hasApplied
-                                ? cancelingFrom === offer.id
-                                  ? (
-                                    <div className="flex items-center">
-                                      <LoadingSpinner size="sm" color="gray" />
-                                      <span className="ml-1">Cancelando...</span>
-                                    </div>
-                                  )
-                                  : 'Cancelar Postulación'
-                                : applyingTo === offer.id
-                                  ? (
-                                    <div className="flex items-center">
-                                      <LoadingSpinner size="sm" color="blue" />
-                                      <span className="ml-1">Postulándose...</span>
-                                    </div>
-                                  )
-                                  : 'Postularse'
-                            }
-                          </button>
-                        )}
-
-                        {isProfessional && offer.status === 'accepted' && offer.professional && offer.professional.id === userProfile.id && (
-                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Postulación Aceptada
-                          </span>
-                        )}
+                      <div className="flex items-center justify-between text-sm text-gray-600">
+                        <span>${companion.hourlyRate}/hora</span>
+                        <span className="text-green-600">● Disponible</span>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+
+                  {companions.length > 3 && (
+                    <button
+                      onClick={() => setShowBooking(true)}
+                      className="w-full text-center text-blue-600 hover:text-blue-700 text-sm font-medium"
+                    >
+                      Ver todos los acompañantes ({companions.length})
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Session Ready Modal */}
+      {currentSession && (
+        <SessionReadyModal
+          session={currentSession}
+          userRole={userProfile?.role || 'user'}
+          isOpen={readyModalOpen}
+          onClose={handleCloseReadyModal}
+          onReady={handleReady}
+          onNotReady={handleNotReady}
+          isOtherPartyReady={otherPartyReady}
+        />
+      )}
+
+      {/* Video Chat Window */}
+      {currentSession && (
+        <VideoChatWindow
+          session={currentSession}
+          userRole={userProfile?.role || 'user'}
+          isOpen={videoChatOpen}
+          onClose={handleCloseVideoChat}
+        />
+      )}
     </div>
   );
 } 

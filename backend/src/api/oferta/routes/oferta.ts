@@ -5,7 +5,7 @@ export default {
         {
             method: 'GET',
             path: '/ofertas',
-            handler: 'oferta.find',
+            handler: 'oferta.getAvailableOffers',
             config: {
                 auth: false,
                 policies: []
@@ -48,36 +48,9 @@ export default {
             }
         },
         {
-            method: 'POST',
-            path: '/ofertas/:id/apply',
-            handler: 'oferta.apply',
-            config: {
-                auth: false,
-                policies: []
-            }
-        },
-        {
-            method: 'POST',
-            path: '/ofertas/:id/cancel-application',
-            handler: 'oferta.cancelApplication',
-            config: {
-                auth: false,
-                policies: []
-            }
-        },
-        {
-            method: 'POST',
-            path: '/ofertas/:id/accept-professional',
-            handler: 'oferta.acceptProfessional',
-            config: {
-                auth: false,
-                policies: []
-            }
-        },
-        {
-            method: 'POST',
-            path: '/ofertas/:id/cancel',
-            handler: 'oferta.cancel',
+            method: 'GET',
+            path: '/ofertas/professional/offers',
+            handler: 'oferta.getProfessionalOffers',
             config: {
                 auth: false,
                 policies: []

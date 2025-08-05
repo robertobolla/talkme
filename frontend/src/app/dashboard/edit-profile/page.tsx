@@ -80,7 +80,9 @@ export default function EditProfilePage() {
           </h1>
           <p className="text-slate-600">
             {role
-              ? 'Actualiza tu información personal y profesional'
+              ? role === 'professional'
+                ? 'Actualiza tu información personal y profesional. ¡No olvides revisar tu tarifa por hora!'
+                : 'Actualiza tu información personal y profesional'
               : 'Completa tu información personal y profesional'
             }
           </p>
@@ -88,11 +90,13 @@ export default function EditProfilePage() {
 
         {showRoleSelector ? (
           <RoleSelection onRoleSelect={(selectedRole: 'client' | 'professional') => {
-            setRole(selectedRole);
+            // Mapear roles del frontend a los del backend
+            const mappedRole = selectedRole === 'client' ? 'user' : 'companion';
+            setRole(mappedRole as any);
             setShowRoleSelector(false);
           }} />
         ) : role && (
-          <ProfileForm role={role} isEditing={true} />
+          <ProfileForm role={role === 'user' ? 'client' : 'professional'} isEditing={true} />
         )}
       </div>
     </div>

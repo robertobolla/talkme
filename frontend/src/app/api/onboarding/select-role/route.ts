@@ -4,22 +4,41 @@ import { auth } from '@clerk/nextjs/server';
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
-
-    // Modo debug: si no hay userId, usar uno de prueba
-    const clerkUserId = userId || 'test_user_' + Date.now();
-
-    if (!userId) {
-      console.log('API Route: Modo debug - usando userId de prueba:', clerkUserId);
-    }
-
     const body = await request.json();
     const { role, fullName, email } = body;
 
-    if (!role || !['client', 'professional'].includes(role)) {
+    // Usar el userId de Clerk si está disponible, sino crear uno único basado en el email
+    let clerkUserId = userId;
+    if (!clerkUserId && email) {
+      // Crear un ID único basado en el email y timestamp
+      clerkUserId = `user_${email.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`;
+    } else if (!clerkUserId) {
+      clerkUserId = `user_${Date.now()}`;
+    }
+
+    console.log('API Route: Usando clerkUserId:', clerkUserId);
+
+    // Mapear roles del frontend a roles del backend
+    const roleMapping: { [key: string]: string } = {
+      'client': 'user',
+      'professional': 'companion',
+      'user': 'user',
+      'companion': 'companion'
+    };
+
+    const mappedRole = roleMapping[role] || role;
+
+    if (!role || !['user', 'companion', 'client', 'professional'].includes(role)) {
       return NextResponse.json({ error: 'Rol inválido' }, { status: 400 });
     }
 
-    console.log('API Route: Enviando solicitud a Strapi:', { role, clerkUserId, fullName, email });
+    console.log('API Route: Enviando solicitud a Strapi:', {
+      originalRole: role,
+      mappedRole,
+      clerkUserId,
+      fullName,
+      email
+    });
 
     // Llamar a la API de Strapi directamente
     const strapiResponse = await fetch('http://localhost:1337/api/onboarding/select-role', {
@@ -28,7 +47,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        role,
+        role: mappedRole,
         clerkUserId,
         fullName,
         email

@@ -98,6 +98,9 @@ export function useProfileStorage() {
       saveLocalProfile(profileData);
       setProfile(profileData);
 
+      // Mapear roles del frontend a los del backend
+      const backendRole = profileData.role === 'client' ? 'user' : 'companion';
+      
       // Intentar guardar en el servidor
       const response = await fetch('/api/onboarding/update-profile', {
         method: 'POST',
@@ -105,7 +108,7 @@ export function useProfileStorage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          role: profileData.role,
+          role: backendRole,
           profileData
         }),
       });

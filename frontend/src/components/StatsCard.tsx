@@ -10,7 +10,7 @@ interface StatsCardProps {
     value: number;
     isPositive: boolean;
   };
-  color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
+  color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'pink' | 'orange';
   className?: string;
   onClick?: () => void;
 }
@@ -50,6 +50,16 @@ export default function StatsCard({
       bg: 'bg-purple-100',
       icon: 'text-purple-600',
       text: 'text-purple-800'
+    },
+    pink: {
+      bg: 'bg-pink-100',
+      icon: 'text-pink-600',
+      text: 'text-pink-800'
+    },
+    orange: {
+      bg: 'bg-orange-100',
+      icon: 'text-orange-600',
+      text: 'text-orange-800'
     }
   };
 

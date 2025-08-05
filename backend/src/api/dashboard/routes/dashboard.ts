@@ -3,15 +3,7 @@ export default {
     {
       method: 'GET',
       path: '/dashboard',
-      handler: 'dashboard.getDashboard',
-      config: {
-        policies: ['global::is-authenticated']
-      }
-    },
-    {
-      method: 'GET',
-      path: '/dashboard/notifications',
-      handler: 'dashboard.getNotifications',
+      handler: 'dashboard.getDashboardData',
       config: {
         policies: ['global::is-authenticated']
       }

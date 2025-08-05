@@ -25,7 +25,9 @@
       "type": "media",
       "multiple": false,
       "required": false,
-      "allowedTypes": ["images"]
+      "allowedTypes": [
+        "images"
+      ]
     },
     "skills": {
       "type": "json",
@@ -66,17 +68,28 @@
       "type": "media",
       "multiple": true,
       "required": false,
-      "allowedTypes": ["files", "images"]
+      "allowedTypes": [
+        "files",
+        "images"
+      ]
     },
     "status": {
       "type": "enumeration",
-      "enum": ["pending", "approved", "suspended"],
+      "enum": [
+        "pending",
+        "approved",
+        "suspended"
+      ],
       "default": "pending",
       "required": true
     },
     "role": {
       "type": "enumeration",
-      "enum": ["user", "companion", "admin"],
+      "enum": [
+        "user",
+        "companion",
+        "admin"
+      ],
       "required": true
     },
     "clerkUserId": {
@@ -177,6 +190,12 @@
       "relation": "oneToMany",
       "target": "api::review.review",
       "mappedBy": "professional"
+    },
+    "availabilitySlots": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::availability-slot.availability-slot",
+      "mappedBy": "companion"
     }
   }
-} 
+}

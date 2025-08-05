@@ -6,214 +6,254 @@ export default factories.createCoreController('api::session.session', ({ strapi 
     try {
       const { user: userId, companion: companionId, startTime, duration, sessionType, specialty, notes } = ctx.request.body;
 
+      console.log('Creating session with data:', { userId, companionId, startTime, duration, sessionType, specialty, notes });
+
       // Validar que el usuario tenga suficiente balance
-      const user = await strapi.entityService.findOne('api::user-profile.user-profile', userId, {
-        populate: ['balance']
-      });
+      const user = await strapi.entityService.findOne('api::user-profile.user-profile', userId);
 
       if (!user) {
-        return ctx.badRequest('Usuario no encontrado');
+        return ctx.send({ error: 'Usuario no encontrado' }, 400);
       }
 
       // Calcular precio basado en la tarifa del acompañante
-      const companion = await strapi.entityService.findOne('api::user-profile.user-profile', companionId, {
-        populate: ['hourlyRate']
-      });
+      const companion = await strapi.entityService.findOne('api::user-profile.user-profile', companionId);
 
       if (!companion) {
-        return ctx.badRequest('Acompañante no encontrado');
+        return ctx.send({ error: 'Acompañante no encontrado' }, 400);
       }
 
-      const price = (companion.hourlyRate * duration) / 60; // Convertir minutos a horas
+      const price = companion.hourlyRate * (duration / 60);
 
-      // Verificar balance suficiente
       if (user.balance < price) {
-        return ctx.badRequest('Balance insuficiente para esta sesión');
+        return ctx.send({ error: 'Saldo insuficiente' }, 400);
       }
-
-      // Calcular endTime
-      const startDateTime = new Date(startTime);
-      const endDateTime = new Date(startDateTime.getTime() + duration * 60000); // duration en minutos
 
       // Crear la sesión
+      const sessionData = {
+        title: `Sesión con ${companion.fullName}`,
+        description: notes || `Sesión de ${sessionType} con ${companion.fullName}`,
+        startTime: new Date(startTime),
+        endTime: new Date(new Date(startTime).getTime() + duration * 60000),
+        duration,
+        price,
+        sessionType,
+        specialty: specialty || 'general',
+        notes,
+        status: 'pending' as const,
+        user: userId,
+        companion: companionId
+      };
+
+      console.log('Creating session with data:', sessionData);
+
       const session = await strapi.entityService.create('api::session.session', {
-        data: {
-          title: `Sesión con ${companion.fullName}`,
-          description: notes || `Sesión de ${sessionType} con ${companion.fullName}`,
-          startTime: startDateTime,
-          endTime: endDateTime,
-          duration,
-          price,
-          sessionType,
-          specialty,
-          notes,
-          status: 'pending',
-          user: userId,
-          companion: companionId
-        }
+        data: sessionData
       });
 
-      // Descontar balance del usuario
+      console.log('Session created successfully:', session);
+
+      // Crear el pago
+      const paymentData = {
+        amount: price,
+        type: 'session_payment' as const,
+        status: 'completed' as const,
+        currency: 'USDT',
+        description: `Pago por sesión de ${duration} minutos`,
+        user: userId,
+        session: session.id
+      };
+
+      console.log('Creating payment with data:', paymentData);
+
+      const payment = await strapi.entityService.create('api::payment.payment', {
+        data: paymentData
+      });
+
+      // Actualizar el balance del usuario
       await strapi.entityService.update('api::user-profile.user-profile', userId, {
-        data: {
-          balance: user.balance - price
-        }
+        data: { balance: user.balance - price }
       });
 
-      // Crear registro de pago
-      await strapi.entityService.create('api::payment.payment', {
-        data: {
-          amount: price,
-          type: 'session_payment',
-          status: 'completed',
-          currency: 'USDT',
-          description: `Pago por sesión de ${duration} minutos`,
-          user: userId,
-          session: session.id
-        }
-      });
-
-      return ctx.created(session);
+      return ctx.send(session, 201);
     } catch (error) {
       console.error('Error creating session:', error);
-      return ctx.internalServerError('Error al crear la sesión');
+      return ctx.send({ error: 'Error al crear la sesión' }, 500);
     }
   },
 
-  // Confirmar una sesión (por el acompañante)
-  async confirm(ctx) {
+  // Confirmar una sesión (acompañante acepta)
+  async confirm(ctx: any) {
     try {
       const { id } = ctx.params;
 
-      const session = await strapi.entityService.findOne('api::session.session', id, {
-        populate: ['companion', 'user']
-      });
+      // Obtener la sesión
+      const session = await strapi.entityService.findOne('api::session.session', id);
 
       if (!session) {
-        return ctx.notFound('Sesión no encontrada');
+        return ctx.send({ error: 'Sesión no encontrada' }, 404);
       }
 
       if (session.status !== 'pending') {
-        return ctx.badRequest('La sesión ya no está pendiente');
+        return ctx.send({ error: 'La sesión no está pendiente de confirmación' }, 400);
       }
 
-      // Actualizar estado de la sesión
-      const updatedSession = await strapi.entityService.update('api::session.session', id, {
+      // Obtener el acompañante usando el ID de la sesión
+      const sessionWithCompanion = await strapi.entityService.findOne('api::session.session', id, {
+        populate: ['companion']
+      }) as any;
+
+      if (!sessionWithCompanion || !sessionWithCompanion.companion) {
+        return ctx.send({ error: 'Acompañante no encontrado' }, 404);
+      }
+
+      const companionId = sessionWithCompanion.companion.id;
+      const companion = await strapi.entityService.findOne('api::user-profile.user-profile', companionId);
+
+      if (!companion) {
+        return ctx.send({ error: 'Acompañante no encontrado' }, 404);
+      }
+
+      // Confirmar la sesión
+      await strapi.entityService.update('api::session.session', id, {
+        data: { status: 'confirmed' as const }
+      });
+
+      // Actualizar ganancias del acompañante (80% del precio de la sesión)
+      await strapi.entityService.update('api::user-profile.user-profile', companionId, {
         data: {
-          status: 'confirmed'
+          totalEarnings: companion.totalEarnings + session.price * 0.8 // 80% para el acompañante
         }
       });
 
-      return ctx.ok(updatedSession);
+      return ctx.send({ message: 'Sesión confirmada exitosamente' });
     } catch (error) {
       console.error('Error confirming session:', error);
-      return ctx.internalServerError('Error al confirmar la sesión');
+      return ctx.send({ error: 'Error al confirmar sesión' }, 500);
     }
   },
 
-  // Iniciar una sesión (crear sala de Daily.co)
+  // Rechazar una sesión (acompañante rechaza)
+  async reject(ctx: any) {
+    try {
+      const { id } = ctx.params;
+
+      // Obtener la sesión
+      const session = await strapi.entityService.findOne('api::session.session', id);
+
+      if (!session) {
+        return ctx.send({ error: 'Sesión no encontrada' }, 404);
+      }
+
+      if (session.status !== 'pending') {
+        return ctx.send({ error: 'La sesión no está pendiente de confirmación' }, 400);
+      }
+
+      // Obtener el usuario para devolver el saldo
+      const user = await strapi.entityService.findOne('api::user-profile.user-profile', session.user);
+
+      if (!user) {
+        return ctx.send({ error: 'Usuario no encontrado' }, 404);
+      }
+
+      // Actualizar el estado de la sesión a 'cancelled'
+      await strapi.entityService.update('api::session.session', id, {
+        data: { status: 'cancelled' as const }
+      });
+
+      // Devolver el saldo al usuario
+      await strapi.entityService.update('api::user-profile.user-profile', session.user, {
+        data: { balance: user.balance + session.price }
+      });
+
+      // Crear un registro de pago de reembolso
+      const refundPaymentData = {
+        amount: session.price,
+        type: 'refund' as const,
+        status: 'completed' as const,
+        currency: 'USDT',
+        description: `Reembolso por sesión rechazada`,
+        user: session.user,
+        session: session.id
+      };
+
+      await strapi.entityService.create('api::payment.payment', {
+        data: refundPaymentData
+      });
+
+      return ctx.send({ message: 'Sesión rechazada exitosamente' });
+    } catch (error) {
+      console.error('Error rejecting session:', error);
+      return ctx.send({ error: 'Error al rechazar sesión' }, 500);
+    }
+  },
+
+  // Iniciar una sesión
   async start(ctx) {
     try {
       const { id } = ctx.params;
 
-      const session = await strapi.entityService.findOne('api::session.session', id, {
-        populate: ['companion', 'user']
-      });
+      const session = await strapi.entityService.findOne('api::session.session', id);
 
       if (!session) {
-        return ctx.notFound('Sesión no encontrada');
+        return ctx.send({ error: 'Sesión no encontrada' }, 404);
       }
 
-      if (session.status !== 'confirmed') {
-        return ctx.badRequest('La sesión debe estar confirmada para iniciar');
-      }
-
+      // Verificar que sea hora de iniciar (5 minutos antes o después)
       const now = new Date();
-      const startTime = new Date(session.startTime);
-      const endTime = new Date(session.endTime);
+      const sessionStart = new Date(session.startTime);
+      const timeDiff = Math.abs(now.getTime() - sessionStart.getTime()) / 60000; // en minutos
 
-      // Verificar que esté en el horario de la sesión
-      if (now < startTime || now > endTime) {
-        return ctx.badRequest('La sesión no está en su horario programado');
+      if (timeDiff > 5) {
+        return ctx.send({ error: 'La sesión no puede iniciarse aún' }, 400);
       }
 
-      // Aquí integrarías Daily.co para crear la sala
-      // Por ahora simulamos la creación
-      const dailyRoomUrl = `https://daily.co/room/${session.id}`;
-      const dailyRoomToken = `token_${session.id}`;
-      const dailyRoomExpiresAt = endTime;
-
-      // Actualizar sesión con información de la sala
-      const updatedSession = await strapi.entityService.update('api::session.session', id, {
+      // Actualizar el estado de la sesión
+      await strapi.entityService.update('api::session.session', id, {
         data: {
-          status: 'in_progress',
-          dailyRoomUrl,
-          dailyRoomToken,
-          dailyRoomExpiresAt
+          status: 'in_progress' as const,
+          actualStartTime: now
         }
       });
 
-      return ctx.ok(updatedSession);
+      return ctx.send({
+        message: 'Sesión iniciada',
+        dailyRoomUrl: `https://daily.co/room/${session.id}`,
+        dailyRoomToken: 'token_placeholder'
+      });
     } catch (error) {
       console.error('Error starting session:', error);
-      return ctx.internalServerError('Error al iniciar la sesión');
+      return ctx.send({ error: 'Error al iniciar la sesión' }, 500);
     }
   },
 
-  // Finalizar una sesión
+  // Completar una sesión
   async complete(ctx) {
     try {
       const { id } = ctx.params;
+      const { rating, review } = ctx.request.body;
 
-      const session = await strapi.entityService.findOne('api::session.session', id, {
-        populate: ['companion', 'user']
-      });
+      const session = await strapi.entityService.findOne('api::session.session', id);
 
       if (!session) {
-        return ctx.notFound('Sesión no encontrada');
+        return ctx.send({ error: 'Sesión no encontrada' }, 404);
       }
 
-      if (session.status !== 'in_progress') {
-        return ctx.badRequest('La sesión debe estar en progreso para finalizar');
-      }
+      const now = new Date();
 
-      // Calcular ganancias del acompañante (ejemplo: 80% del precio)
-      const companionEarnings = session.price * 0.8;
-      const platformFee = session.price * 0.2;
-
-      // Actualizar balance del acompañante
-      const companion = await strapi.entityService.findOne('api::user-profile.user-profile', session.companion.id);
-      await strapi.entityService.update('api::user-profile.user-profile', session.companion.id, {
+      // Actualizar el estado de la sesión
+      await strapi.entityService.update('api::session.session', id, {
         data: {
-          balance: companion.balance + companionEarnings,
-          totalEarnings: companion.totalEarnings + companionEarnings
+          status: 'completed' as const,
+          actualEndTime: now,
+          rating,
+          review
         }
       });
 
-      // Crear registro de ganancia para el acompañante
-      await strapi.entityService.create('api::payment.payment', {
-        data: {
-          amount: companionEarnings,
-          type: 'session_earning',
-          status: 'completed',
-          currency: 'USDT',
-          description: `Ganancia por sesión de ${session.duration} minutos`,
-          user: session.companion.id,
-          session: session.id
-        }
-      });
-
-      // Actualizar estado de la sesión
-      const updatedSession = await strapi.entityService.update('api::session.session', id, {
-        data: {
-          status: 'completed'
-        }
-      });
-
-      return ctx.ok(updatedSession);
+      return ctx.send({ message: 'Sesión completada exitosamente' });
     } catch (error) {
       console.error('Error completing session:', error);
-      return ctx.internalServerError('Error al finalizar la sesión');
+      return ctx.send({ error: 'Error al completar la sesión' }, 500);
     }
   },
 
@@ -233,10 +273,10 @@ export default factories.createCoreController('api::session.session', ({ strapi 
         sort: { startTime: 'desc' }
       });
 
-      return ctx.ok(sessions);
+      return ctx.send(sessions);
     } catch (error) {
       console.error('Error getting user sessions:', error);
-      return ctx.internalServerError('Error al obtener las sesiones');
+      return ctx.send({ error: 'Error al obtener las sesiones' }, 500);
     }
   },
 
@@ -249,14 +289,14 @@ export default factories.createCoreController('api::session.session', ({ strapi 
           status: 'approved',
           isOnline: true
         },
-        populate: ['profilePhoto'],
-        sort: { averageRating: 'desc' }
+        sort: { fullName: 'asc' }
       });
 
-      return ctx.ok(companions);
+      console.log('Companions found:', companions.length);
+      return ctx.send(companions);
     } catch (error) {
       console.error('Error getting available companions:', error);
-      return ctx.internalServerError('Error al obtener acompañantes disponibles');
+      return ctx.send({ error: 'Error al obtener acompañantes disponibles' }, 500);
     }
   }
 })); 

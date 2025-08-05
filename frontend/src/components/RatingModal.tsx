@@ -125,11 +125,10 @@ export default function RatingModal({
                   className="focus:outline-none"
                 >
                   <Star
-                    className={`w-8 h-8 transition-colors ${
-                      star <= (hoverRating || rating)
+                    className={`w-8 h-8 transition-colors ${star <= (hoverRating || rating)
                         ? 'text-yellow-400 fill-current'
                         : 'text-gray-300'
-                    }`}
+                      }`}
                   />
                 </button>
               ))}
@@ -149,7 +148,7 @@ export default function RatingModal({
               Review *
             </label>
             <textarea
-              value={review}
+              value={review || ''}
               onChange={(e) => setReview(e.target.value)}
               placeholder="Cuéntanos sobre tu experiencia con este profesional..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"

@@ -410,6 +410,82 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiAvailabilitySlotAvailabilitySlot
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'availability_slots';
+  info: {
+    description: 'Horarios de disponibilidad de los acompa\u00F1antes';
+    displayName: 'Availability Slot';
+    pluralName: 'availability-slots';
+    singularName: 'availability-slot';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    companion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::user-profile.user-profile'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    dayOfWeek: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 6;
+          min: 0;
+        },
+        number
+      >;
+    endDate: Schema.Attribute.Date;
+    endTime: Schema.Attribute.Time & Schema.Attribute.Required;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::availability-slot.availability-slot'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    startDate: Schema.Attribute.Date;
+    startTime: Schema.Attribute.Time & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiDashboardDashboard extends Struct.SingleTypeSchema {
+  collectionName: 'dashboards';
+  info: {
+    description: 'Dashboard data for users';
+    displayName: 'Dashboard';
+    pluralName: 'dashboards';
+    singularName: 'dashboard';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    data: Schema.Attribute.JSON;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::dashboard.dashboard'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiOfertaOferta extends Struct.CollectionTypeSchema {
   collectionName: 'ofertas';
   info: {
@@ -476,6 +552,80 @@ export interface ApiOfertaOferta extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiPaymentPayment extends Struct.CollectionTypeSchema {
+  collectionName: 'payments';
+  info: {
+    description: 'Sistema de pagos y balance interno';
+    displayName: 'Payment';
+    pluralName: 'payments';
+    singularName: 'payment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    amount: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    cryptoAddress: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    currency: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 10;
+      }> &
+      Schema.Attribute.DefaultTo<'USDT'>;
+    description: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::payment.payment'
+    > &
+      Schema.Attribute.Private;
+    processedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    relatedPayment: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::payment.payment'
+    >;
+    relatedPayments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::payment.payment'
+    >;
+    session: Schema.Attribute.Relation<'oneToOne', 'api::session.session'>;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'completed', 'failed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    transactionHash: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    type: Schema.Attribute.Enumeration<
+      ['deposit', 'withdrawal', 'session_payment', 'session_earning', 'refund']
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::user-profile.user-profile'
+    >;
+  };
+}
+
 export interface ApiReviewReview extends Struct.CollectionTypeSchema {
   collectionName: 'reviews';
   info: {
@@ -538,10 +688,96 @@ export interface ApiReviewReview extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiSessionSession extends Struct.CollectionTypeSchema {
+  collectionName: 'sessions';
+  info: {
+    description: 'Sesiones de acompa\u00F1amiento virtual entre usuarios y acompa\u00F1antes';
+    displayName: 'Session';
+    pluralName: 'sessions';
+    singularName: 'session';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    companion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::user-profile.user-profile'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    dailyRoomExpiresAt: Schema.Attribute.DateTime;
+    dailyRoomToken: Schema.Attribute.String;
+    dailyRoomUrl: Schema.Attribute.String;
+    description: Schema.Attribute.Text;
+    duration: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 480;
+          min: 15;
+        },
+        number
+      >;
+    endTime: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::session.session'
+    > &
+      Schema.Attribute.Private;
+    notes: Schema.Attribute.Text;
+    payment: Schema.Attribute.Relation<'oneToOne', 'api::payment.payment'>;
+    price: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    publishedAt: Schema.Attribute.DateTime;
+    rating: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 5;
+          min: 1;
+        },
+        number
+      >;
+    review: Schema.Attribute.Text;
+    sessionType: Schema.Attribute.Enumeration<['video', 'chat', 'voice']> &
+      Schema.Attribute.Required;
+    specialty: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    startTime: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::user-profile.user-profile'
+    >;
+  };
+}
+
 export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
   collectionName: 'user_profiles';
   info: {
-    description: 'Perfil de usuario para clientes y profesionales';
+    description: 'Perfil de usuario para clientes y acompa\u00F1antes virtuales';
     displayName: 'User Profile';
     pluralName: 'user-profiles';
     singularName: 'user-profile';
@@ -552,6 +788,10 @@ export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
   attributes: {
     address: Schema.Attribute.Text & Schema.Attribute.Required;
     applications: Schema.Attribute.Relation<'manyToMany', 'api::oferta.oferta'>;
+    availabilitySlots: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::availability-slot.availability-slot'
+    >;
     averageRating: Schema.Attribute.Decimal &
       Schema.Attribute.SetMinMax<
         {
@@ -561,10 +801,22 @@ export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
         number
       > &
       Schema.Attribute.DefaultTo<0>;
+    balance: Schema.Attribute.Decimal &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
     bio: Schema.Attribute.Text;
     clerkUserId: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
+    companionSessions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::session.session'
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -587,6 +839,9 @@ export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
         },
         number
       >;
+    isOnline: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    languages: Schema.Attribute.JSON;
+    lastSeen: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -594,6 +849,7 @@ export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     offers: Schema.Attribute.Relation<'oneToMany', 'api::oferta.oferta'>;
+    payments: Schema.Attribute.Relation<'oneToMany', 'api::payment.payment'>;
     phone: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.SetMinMaxLength<{
@@ -610,12 +866,21 @@ export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::review.review'
     >;
-    role: Schema.Attribute.Enumeration<['client', 'professional', 'admin']> &
+    role: Schema.Attribute.Enumeration<['user', 'companion', 'admin']> &
       Schema.Attribute.Required;
     skills: Schema.Attribute.JSON;
+    specialties: Schema.Attribute.JSON;
     status: Schema.Attribute.Enumeration<['pending', 'approved', 'suspended']> &
       Schema.Attribute.Required &
       Schema.Attribute.DefaultTo<'pending'>;
+    totalEarnings: Schema.Attribute.Decimal &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
     totalHoursWorked: Schema.Attribute.Integer &
       Schema.Attribute.SetMinMax<
         {
@@ -627,6 +892,10 @@ export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    userSessions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::session.session'
+    >;
     weeklyAvailability: Schema.Attribute.JSON;
     workZones: Schema.Attribute.JSON;
   };
@@ -1142,8 +1411,12 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::availability-slot.availability-slot': ApiAvailabilitySlotAvailabilitySlot;
+      'api::dashboard.dashboard': ApiDashboardDashboard;
       'api::oferta.oferta': ApiOfertaOferta;
+      'api::payment.payment': ApiPaymentPayment;
       'api::review.review': ApiReviewReview;
+      'api::session.session': ApiSessionSession;
       'api::user-profile.user-profile': ApiUserProfileUserProfile;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;

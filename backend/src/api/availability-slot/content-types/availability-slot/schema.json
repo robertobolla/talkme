@@ -1,0 +1,48 @@
+{
+  "kind": "collectionType",
+  "collectionName": "availability_slots",
+  "info": {
+    "singularName": "availability-slot",
+    "pluralName": "availability-slots",
+    "displayName": "Availability Slot",
+    "description": "Horarios de disponibilidad de los acompañantes"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "dayOfWeek": {
+      "type": "integer",
+      "required": true,
+      "min": 0,
+      "max": 6
+    },
+    "startTime": {
+      "type": "time",
+      "required": true
+    },
+    "endTime": {
+      "type": "time",
+      "required": true
+    },
+    "startDate": {
+      "type": "date",
+      "required": false
+    },
+    "endDate": {
+      "type": "date",
+      "required": false
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "companion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "availabilitySlots"
+    }
+  }
+}

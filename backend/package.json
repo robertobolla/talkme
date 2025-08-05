@@ -23,6 +23,7 @@
     "@strapi/strapi": "5.20.0",
     "better-sqlite3": "11.3.0",
     "cloudinary": "^2.7.0",
+    "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",

@@ -3,10 +3,22 @@ import { auth } from '@clerk/nextjs/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth();
+    let userId;
+
+    try {
+      const authResult = await auth();
+      userId = authResult.userId;
+    } catch (authError) {
+      console.log('ProfileForm API: No se pudo autenticar con Clerk, continuando sin userId');
+      userId = null;
+    }
 
     if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+      console.log('ProfileForm API: No hay userId, devolviendo perfil vacío');
+      return NextResponse.json({
+        success: true,
+        data: null
+      });
     }
 
     console.log('=== ProfileForm API: Verificando perfil en Strapi ===');
@@ -76,7 +88,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
+    let userId;
+
+    try {
+      const authResult = await auth();
+      userId = authResult.userId;
+    } catch (authError) {
+      console.log('ProfileForm API: No se pudo autenticar con Clerk, continuando sin userId');
+      userId = null;
+    }
 
     if (!userId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -99,21 +119,21 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.STRAPI_API_TOKEN}`,
       },
       body: JSON.stringify({ data: dataToSave }),
     });
 
     if (response.ok) {
-      const savedProfile = await response.json();
-      console.log('ProfileForm API: Perfil guardado en Strapi:', savedProfile.data.id);
-
+      const result = await response.json();
+      console.log('ProfileForm API: Perfil guardado exitosamente:', result.data.id);
       return NextResponse.json({
         success: true,
-        message: 'Perfil guardado exitosamente',
-        data: savedProfile.data
+        data: result.data
       });
     } else {
-      console.error('ProfileForm API: Error al guardar perfil en Strapi');
+      const errorText = await response.text();
+      console.error('ProfileForm API: Error al guardar perfil:', errorText);
       return NextResponse.json(
         { error: 'Error al guardar el perfil' },
         { status: 500 }

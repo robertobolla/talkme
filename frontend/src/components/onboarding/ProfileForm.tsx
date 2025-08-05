@@ -20,11 +20,7 @@ interface ProfileData {
   hourlyRate: number;
   skills: string[];
   workZones: string[];
-  emergencyContact?: {
-    name: string;
-    phone: string;
-    relationship: string;
-  };
+
 }
 
 interface FormErrors {
@@ -41,8 +37,8 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
   const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
 
   const [profileData, setProfileData] = useState<ProfileData>({
-    fullName: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : '',
-    email: user?.emailAddresses?.[0]?.emailAddress || user?.primaryEmailAddress?.emailAddress || '',
+    fullName: '',
+    email: '',
     phone: '',
     dateOfBirth: '',
     address: '',
@@ -58,6 +54,20 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
   });
 
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+
+  // Inicializar datos del usuario cuando esté disponible
+  useEffect(() => {
+    if (user) {
+      const clerkEmail = user?.emailAddresses?.[0]?.emailAddress || user?.primaryEmailAddress?.emailAddress || '';
+      const clerkFullName = user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : '';
+
+      setProfileData(prev => ({
+        ...prev,
+        email: clerkEmail,
+        fullName: prev.fullName || clerkFullName
+      }));
+    }
+  }, [user]);
 
   // Cargar datos existentes si estamos en modo edición
   useEffect(() => {
@@ -87,21 +97,14 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
         ...prev,
         ...sanitizedProfile
       }));
+
+      console.log('Perfil cargado en modo edición:', sanitizedProfile);
+      console.log('Tarifa por hora cargada:', sanitizedProfile.hourlyRate);
     }
   }, [isEditing, profile, user]);
 
-  // Actualizar email cuando el usuario de Clerk cambie
-  useEffect(() => {
-    if (user) {
-      const clerkEmail = user?.emailAddresses?.[0]?.emailAddress || user?.primaryEmailAddress?.emailAddress || '';
-      setProfileData(prev => ({
-        ...prev,
-        email: clerkEmail
-      }));
-    }
-  }, [user]);
-
   const handleInputChange = (field: keyof ProfileData, value: any) => {
+    console.log(`Cambiando campo ${field} a:`, value);
     setProfileData(prev => ({
       ...prev,
       [field]: value
@@ -115,15 +118,7 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
     }
   };
 
-  const handleEmergencyContactChange = (field: string, value: string) => {
-    setProfileData(prev => ({
-      ...prev,
-      emergencyContact: {
-        ...prev.emergencyContact!,
-        [field]: value
-      }
-    }));
-  };
+
 
   const addSkill = (skill: string) => {
     if (skill.trim() && !profileData.skills.includes(skill.trim())) {
@@ -160,22 +155,36 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
   const validateStep = (step: number): boolean => {
     const errors: FormErrors = {};
 
-    if (step === 1) {
+    // Validación para modo edición (una sola página)
+    if (isEditing) {
+      // Validaciones básicas siempre requeridas
       if (!profileData.fullName.trim()) errors.fullName = 'El nombre es requerido';
       if (!profileData.phone.trim()) errors.phone = 'El teléfono es requerido';
       if (!profileData.dateOfBirth) errors.dateOfBirth = 'La fecha de nacimiento es requerida';
       if (!profileData.address.trim()) errors.address = 'La dirección es requerida';
-    }
 
-    if (step === 2 && role === 'professional') {
-      if (!profileData.bio.trim()) errors.bio = 'La biografía es requerida';
-      if (profileData.hourlyRate <= 0) errors.hourlyRate = 'La tarifa por hora debe ser mayor a 0';
-    }
+      // Validaciones específicas por rol
+      if (role === 'professional') {
+        if (!profileData.bio.trim()) errors.bio = 'La biografía es requerida';
+        if (profileData.hourlyRate <= 0) errors.hourlyRate = 'La tarifa por hora debe ser mayor a 0';
+      }
 
-    if (step === 3 && role === 'client') {
-      if (!profileData.emergencyContact?.name?.trim()) errors.emergencyName = 'El nombre del contacto de emergencia es requerido';
-      if (!profileData.emergencyContact?.phone?.trim()) errors.emergencyPhone = 'El teléfono del contacto de emergencia es requerido';
-      if (!profileData.emergencyContact?.relationship?.trim()) errors.emergencyRelationship = 'La relación con el contacto de emergencia es requerida';
+
+    } else {
+      // Validación para modo onboarding (por pasos)
+      if (step === 1) {
+        if (!profileData.fullName.trim()) errors.fullName = 'El nombre es requerido';
+        if (!profileData.phone.trim()) errors.phone = 'El teléfono es requerido';
+        if (!profileData.dateOfBirth) errors.dateOfBirth = 'La fecha de nacimiento es requerida';
+        if (!profileData.address.trim()) errors.address = 'La dirección es requerida';
+      }
+
+      if (step === 2 && role === 'professional') {
+        if (!profileData.bio.trim()) errors.bio = 'La biografía es requerida';
+        if (profileData.hourlyRate <= 0) errors.hourlyRate = 'La tarifa por hora debe ser mayor a 0';
+      }
+
+
     }
 
     setFormErrors(errors);
@@ -183,7 +192,7 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(currentStep)) return;
+    if (!validateStep(isEditing ? 1 : currentStep)) return;
 
     setIsLoading(true);
     setError(null);
@@ -333,7 +342,7 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
 
   const renderProfessionalInfo = () => (
     <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-900 mb-4">Información Profesional</h3>
+      <h3 className="text-xl font-semibold text-gray-900 mb-4">Información de Acompañante</h3>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -345,38 +354,44 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
           className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${formErrors.bio ? 'border-red-500' : 'border-gray-300'
             }`}
           rows={4}
-          placeholder="Cuéntanos sobre tu experiencia y por qué te apasiona el cuidado..."
+          placeholder="Cuéntanos sobre tu experiencia y por qué te apasiona ser acompañante virtual..."
         />
         {formErrors.bio && (
           <p className="text-red-500 text-sm mt-1">{formErrors.bio}</p>
         )}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Tarifa por Hora (€) *
-        </label>
-        <div className="relative">
-          <DollarSign className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-          <input
-            type="number"
-            value={profileData.hourlyRate || profileData.hourlyRate === 0 ? profileData.hourlyRate : ''}
-            onChange={(e) => {
-              const value = e.target.value;
-              const numValue = value === '' ? 0 : parseFloat(value);
-              handleInputChange('hourlyRate', isNaN(numValue) ? 0 : numValue);
-            }}
-            className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${formErrors.hourlyRate ? 'border-red-500' : 'border-gray-300'
-              }`}
-            placeholder="15"
-            min="0"
-            step="0.01"
-          />
+      {/* Campo de tarifa por hora solo para acompañantes */}
+      {role === 'professional' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tarifa por Hora (USDT) *
+          </label>
+          <div className="relative">
+            <DollarSign className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <input
+              type="number"
+              value={profileData.hourlyRate || profileData.hourlyRate === 0 ? profileData.hourlyRate : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                const numValue = value === '' ? 0 : parseFloat(value);
+                handleInputChange('hourlyRate', isNaN(numValue) ? 0 : numValue);
+              }}
+              className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${formErrors.hourlyRate ? 'border-red-500' : 'border-gray-300'
+                }`}
+              placeholder="25"
+              min="0"
+              step="0.01"
+            />
+          </div>
+          <p className="text-sm text-blue-600 mt-2 font-medium">
+            💡 Esta es tu tarifa por hora que verán los usuarios al reservar sesiones. Puedes ajustarla en cualquier momento.
+          </p>
+          {formErrors.hourlyRate && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.hourlyRate}</p>
+          )}
         </div>
-        {formErrors.hourlyRate && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.hourlyRate}</p>
-        )}
-      </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -480,67 +495,7 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
     </div>
   );
 
-  const renderEmergencyContact = () => (
-    <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-900 mb-4">Contacto de Emergencia</h3>
-      <p className="text-gray-600 mb-6">
-        En caso de emergencia con tu familiar, el profesional necesitará saber a quién contactar.
-      </p>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Nombre *
-          </label>
-          <input
-            type="text"
-            value={profileData.emergencyContact?.name || ''}
-            onChange={(e) => handleEmergencyContactChange('name', e.target.value)}
-            className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${formErrors.emergencyName ? 'border-red-500' : 'border-gray-300'
-              }`}
-            placeholder="Nombre del contacto"
-          />
-          {formErrors.emergencyName && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.emergencyName}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Teléfono *
-          </label>
-          <input
-            type="tel"
-            value={profileData.emergencyContact?.phone || ''}
-            onChange={(e) => handleEmergencyContactChange('phone', e.target.value)}
-            className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${formErrors.emergencyPhone ? 'border-red-500' : 'border-gray-300'
-              }`}
-            placeholder="+34 600 000 000"
-          />
-          {formErrors.emergencyPhone && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.emergencyPhone}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Relación *
-          </label>
-          <input
-            type="text"
-            value={profileData.emergencyContact?.relationship || ''}
-            onChange={(e) => handleEmergencyContactChange('relationship', e.target.value)}
-            className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${formErrors.emergencyRelationship ? 'border-red-500' : 'border-gray-300'
-              }`}
-            placeholder="Familiar, amigo, etc."
-          />
-          {formErrors.emergencyRelationship && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.emergencyRelationship}</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -563,26 +518,28 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
               ? 'Actualiza tu información personal y profesional'
               : role === 'client'
                 ? 'Cuéntanos sobre ti para personalizar tu experiencia'
-                : 'Completa tu perfil profesional para empezar a ofrecer servicios'
+                : 'Completa tu perfil de acompañante para empezar a ofrecer sesiones virtuales'
             }
           </p>
         </div>
 
-        {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-slate-700">Progreso</span>
-            <span className="text-sm text-slate-500">
-              {currentStep}/{role === 'professional' ? 2 : 3}
-            </span>
+        {/* Progress Bar - Solo mostrar si no está en modo edición */}
+        {!isEditing && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">Progreso</span>
+              <span className="text-sm text-slate-500">
+                {currentStep}/2
+              </span>
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(currentStep / 2) * 100}%` }}
+              ></div>
+            </div>
           </div>
-          <div className="w-full bg-slate-200 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(currentStep / (role === 'professional' ? 2 : 3)) * 100}%` }}
-            ></div>
-          </div>
-        </div>
+        )}
 
         {/* Error Message */}
         {error && (
@@ -595,50 +552,81 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
 
         {/* Form */}
         <div className="bg-white rounded-2xl shadow-lg p-8">
-          {currentStep === 1 && renderBasicInfo()}
-          {currentStep === 2 && role === 'professional' && renderProfessionalInfo()}
-          {currentStep === 3 && role === 'client' && renderEmergencyContact()}
+          {isEditing ? (
+            // Modo edición: mostrar todo en una sola página
+            <div className="space-y-8">
+              {renderBasicInfo()}
+              {role === 'professional' && renderProfessionalInfo()}
 
-          {/* Navigation */}
-          <div className="flex gap-4 pt-6">
-            <button
-              type="button"
-              onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
-              disabled={currentStep === 1}
-              className={`px-6 py-3 rounded-lg font-medium ${currentStep === 1
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-            >
-              Anterior
-            </button>
+              {/* Botón de guardar para modo edición */}
+              <div className="flex justify-end pt-6">
+                <button
+                  onClick={handleSubmit}
+                  disabled={isLoading}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Guardando...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <Save className="w-4 h-4 mr-2" />
+                      Guardar Cambios
+                    </div>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Modo onboarding: mostrar por pasos
+            <>
+              {currentStep === 1 && renderBasicInfo()}
+              {currentStep === 2 && role === 'professional' && renderProfessionalInfo()}
 
-            <button
-              onClick={() => {
-                if (currentStep < (role === 'professional' ? 2 : 3)) {
-                  setCurrentStep(prev => prev + 1);
-                } else {
-                  handleSubmit();
-                }
-              }}
-              disabled={isLoading}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              {isLoading ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Guardando...
-                </div>
-              ) : currentStep === (role === 'professional' ? 2 : 3) ? (
-                <div className="flex items-center">
-                  <Save className="w-4 h-4 mr-2" />
-                  {isEditing ? 'Guardar Cambios' : 'Completar Perfil'}
-                </div>
-              ) : (
-                'Siguiente'
-              )}
-            </button>
-          </div>
+              {/* Navigation */}
+              <div className="flex gap-4 pt-6">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
+                  disabled={currentStep === 1}
+                  className={`px-6 py-3 rounded-lg font-medium ${currentStep === 1
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                >
+                  Anterior
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (currentStep < 2) {
+                      setCurrentStep(prev => prev + 1);
+                    } else {
+                      handleSubmit();
+                    }
+                  }}
+                  disabled={isLoading}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Guardando...
+                    </div>
+                  ) : currentStep === 2 ? (
+                    <div className="flex items-center">
+                      <Save className="w-4 h-4 mr-2" />
+                      Completar Perfil
+                    </div>
+                  ) : (
+                    'Siguiente'
+                  )}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

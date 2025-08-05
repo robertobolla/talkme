@@ -1,223 +1,170 @@
-export default {
-  async getDashboard(ctx) {
-    const { user } = ctx.state;
+import { factories } from '@strapi/strapi';
 
-    if (!user) {
-      ctx.throw(401, 'No autorizado');
-    }
+export default factories.createCoreController('api::dashboard.dashboard', ({ strapi }) => ({
+  async getDashboardData(ctx: any) {
+    try {
+      const { user } = ctx.state;
 
-    const userProfile = await strapi.entityService.findMany('api::user-profile.user-profile', {
-      filters: { clerkUserId: user.id }
-    });
+      if (!user) {
+        return ctx.send({ error: 'Usuario no autenticado' }, 401);
+      }
 
-    if (userProfile.length === 0) {
-      ctx.throw(400, 'Debe completar su perfil primero');
-    }
+      // Buscar perfil del usuario
+      const profile = await strapi.entityService.findOne('api::user-profile.user-profile', user.id);
 
-    const profile = userProfile[0];
+      if (!profile) {
+        return ctx.send({ error: 'Perfil no encontrado' }, 404);
+      }
 
-    // Datos específicos según el rol
-    if (profile.role === 'client') {
-      return await this.getClientDashboard(ctx, profile);
-    } else if (profile.role === 'professional') {
-      return await this.getProfessionalDashboard(ctx, profile);
-    } else {
-      ctx.throw(400, 'Rol no válido');
-    }
-  },
+      let dashboardData;
 
-  async getClientDashboard(ctx, profile) {
-    // Obtener ofertas del cliente
-    const offers = await strapi.entityService.findMany('api::oferta.oferta', {
-      filters: { client: { id: { $eq: profile.id } } },
-      populate: ['professional', 'applicants'],
-      sort: { createdAt: 'desc' }
-    });
+      if (profile.role === 'user') {
+        dashboardData = await this.getUserDashboard(profile);
+      } else if (profile.role === 'companion') {
+        dashboardData = await this.getCompanionDashboard(profile);
+      } else {
+        return ctx.send({ error: 'Rol no válido' }, 400);
+      }
 
-    // Estadísticas del cliente
-    const stats = {
-      totalOffers: offers.length,
-      activeOffers: offers.filter(o => o.status === 'published').length,
-      completedOffers: offers.filter(o => o.status === 'completed').length,
-      pendingOffers: offers.filter(o => o.status === 'accepted').length
-    };
+      // Agregar notificaciones
+      const notifications = [];
 
-    // Ofertas recientes
-    const recentOffers = offers.slice(0, 5);
-
-    // Profesionales favoritos (con más trabajos completados)
-    const favoriteProfessionals = await strapi.entityService.findMany('api::user-profile.user-profile', {
-      filters: {
-        role: 'professional',
-        status: 'approved'
-      },
-      populate: ['reviewsReceived'],
-      sort: { averageRating: 'desc' },
-      limit: 5
-    });
-
-    return {
-      role: 'client',
-      profile: profile,
-      stats: stats,
-      recentOffers: recentOffers,
-      favoriteProfessionals: favoriteProfessionals,
-      quickActions: [
-        { name: 'Crear Oferta', action: 'create-offer', icon: 'plus' },
-        { name: 'Ver Ofertas', action: 'view-offers', icon: 'list' },
-        { name: 'Buscar Profesionales', action: 'search-professionals', icon: 'search' },
-        { name: 'Mis Pagos', action: 'payments', icon: 'credit-card' }
-      ]
-    };
-  },
-
-  async getProfessionalDashboard(ctx, profile) {
-    // Verificar si el perfil está aprobado
-    if (profile.status !== 'approved') {
-      return {
-        role: 'professional',
-        profile: profile,
-        needsApproval: true,
-        message: 'Tu perfil está pendiente de aprobación. Recibirás una notificación cuando sea aprobado.'
-      };
-    }
-
-    // Ofertas donde se ha postulado
-    const appliedOffers = await strapi.entityService.findMany('api::oferta.oferta', {
-      filters: {
-        applicants: { id: { $eq: profile.id } }
-      },
-      populate: ['client'],
-      sort: { createdAt: 'desc' }
-    });
-
-    // Ofertas donde ha sido aceptado
-    const acceptedOffers = await strapi.entityService.findMany('api::oferta.oferta', {
-      filters: {
-        professional: { id: { $eq: profile.id } }
-      },
-      populate: ['client', 'professional'],
-      sort: { createdAt: 'desc' }
-    });
-
-    // Ofertas disponibles (donde no se ha postulado)
-    const availableOffers = await strapi.entityService.findMany('api::oferta.oferta', {
-      filters: {
-        status: 'published',
-        applicants: { id: { $not: { $eq: profile.id } } }
-      },
-      populate: ['client'],
-      sort: { createdAt: 'desc' },
-      limit: 10
-    });
-
-    // Reseñas recibidas
-    const reviews = await strapi.entityService.findMany('api::review.review', {
-      filters: { professional: profile.id },
-      populate: ['client'],
-      sort: { createdAt: 'desc' },
-      limit: 5
-    });
-
-    // Estadísticas del profesional
-    const stats = {
-      totalApplications: appliedOffers.length,
-      acceptedJobs: acceptedOffers.length,
-      completedJobs: acceptedOffers.filter(o => o.status === 'completed').length,
-      averageRating: profile.averageRating || 0,
-      totalHours: profile.totalHoursWorked || 0,
-      totalEarnings: acceptedOffers
-        .filter(o => o.status === 'completed')
-        .reduce((sum, o) => {
-          // Calcular ganancias basadas en el profesional asignado
-          const offer = o as any;
-          if (offer.professional && offer.professional.hourlyRate) {
-            return sum + (offer.professional.hourlyRate * o.duration);
+      if (profile.role === 'user') {
+        const pendingSessions = await strapi.entityService.findMany('api::session.session', {
+          filters: {
+            $or: [
+              { user: { id: { $eq: profile.id } } },
+              { companion: { id: { $eq: profile.id } } }
+            ],
+            status: 'pending'
           }
-          return sum;
-        }, 0)
-    };
+        });
 
-    return {
-      role: 'professional',
-      profile: profile,
-      stats: stats,
-      appliedOffers: appliedOffers.slice(0, 5),
-      acceptedOffers: acceptedOffers.slice(0, 5),
-      availableOffers: availableOffers,
-      recentReviews: reviews,
-      quickActions: [
-        { name: 'Buscar Ofertas', action: 'search-offers', icon: 'search' },
-        { name: 'Mis Postulaciones', action: 'my-applications', icon: 'list' },
-        { name: 'Mis Trabajos', action: 'my-jobs', icon: 'briefcase' },
-        { name: 'Mi Perfil', action: 'edit-profile', icon: 'user' },
-        { name: 'Mis Ganancias', action: 'earnings', icon: 'dollar-sign' }
-      ]
-    };
+        if (pendingSessions.length > 0) {
+          notifications.push({
+            type: 'info',
+            message: `Tienes ${pendingSessions.length} sesión(es) pendiente(s) de confirmación`
+          });
+        }
+      }
+
+      return ctx.send({
+        ...dashboardData,
+        notifications,
+        userRole: profile.role
+      });
+
+    } catch (error) {
+      console.error('Error in getDashboardData:', error);
+      return ctx.send({ error: 'Error interno del servidor' }, 500);
+    }
   },
 
-  async getNotifications(ctx) {
-    const { user } = ctx.state;
+  async getUserDashboard(profile: any) {
+    try {
+      // Obtener sesiones del usuario
+      const sessions = await strapi.entityService.findMany('api::session.session', {
+        filters: { user: { id: { $eq: profile.id } } },
+        sort: { startTime: 'desc' }
+      });
 
-    if (!user) {
-      ctx.throw(401, 'No autorizado');
-    }
-
-    const userProfile = await strapi.entityService.findMany('api::user-profile.user-profile', {
-      filters: { clerkUserId: user.id }
-    });
-
-    if (userProfile.length === 0) {
-      ctx.throw(400, 'Debe completar su perfil primero');
-    }
-
-    const profile = userProfile[0];
-
-    // Obtener notificaciones según el rol
-    let notifications = [];
-
-    if (profile.role === 'client') {
-      // Notificaciones para clientes
-      const offers = await strapi.entityService.findMany('api::oferta.oferta', {
-        filters: { client: { id: { $eq: profile.id } } },
-        populate: ['applicants'],
+      // Obtener pagos del usuario
+      const payments = await strapi.entityService.findMany('api::payment.payment', {
+        filters: { user: { id: { $eq: profile.id } } },
         sort: { createdAt: 'desc' }
       });
 
-      notifications = offers
-        .filter(o => (o as any).applicants && (o as any).applicants.length > 0)
-        .map(o => ({
-          id: o.id,
-          type: 'new_application',
-          title: 'Nueva postulación',
-          message: `Has recibido ${(o as any).applicants.length} nueva(s) postulación(es) para tu oferta "${o.title}"`,
-          date: o.createdAt,
-          read: false
-        }));
-    } else if (profile.role === 'professional') {
-      // Notificaciones para profesionales
-      const acceptedOffers = await strapi.entityService.findMany('api::oferta.oferta', {
-        filters: {
-          professional: { id: { $eq: profile.id } },
-          status: 'accepted'
-        },
-        populate: ['client'],
+      // Calcular estadísticas
+      const totalSessions = sessions.length;
+      const completedSessions = sessions.filter((s: any) => s.status === 'completed').length;
+      const pendingSessions = sessions.filter((s: any) => s.status === 'pending').length;
+      const balance = profile.balance || 0;
+
+      // Calcular total gastado
+      const totalSpent = payments
+        .filter((p: any) => p.type === 'session_payment')
+        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+
+      return {
+        stats: [
+          {
+            title: 'Saldo Disponible',
+            value: `$${balance}`,
+            icon: 'DollarSign',
+            color: 'blue'
+          },
+          {
+            title: 'Sesiones Activas',
+            value: pendingSessions.toString(),
+            icon: 'Calendar',
+            color: 'purple'
+          },
+          {
+            title: 'Sesiones Completadas',
+            value: completedSessions.toString(),
+            icon: 'Clock',
+            color: 'orange'
+          }
+        ],
+        recentSessions: sessions.slice(0, 5),
+        totalSpent
+      };
+    } catch (error) {
+      console.error('Error getting user dashboard:', error);
+      throw error;
+    }
+  },
+
+  async getCompanionDashboard(profile: any) {
+    try {
+      // Obtener sesiones del acompañante
+      const sessions = await strapi.entityService.findMany('api::session.session', {
+        filters: { companion: { id: { $eq: profile.id } } },
+        sort: { startTime: 'desc' }
+      });
+
+      // Obtener pagos del acompañante
+      const payments = await strapi.entityService.findMany('api::payment.payment', {
+        filters: { user: { id: { $eq: profile.id } }, type: 'session_earning' },
         sort: { createdAt: 'desc' }
       });
 
-      notifications = acceptedOffers.map(o => ({
-        id: o.id,
-        type: 'job_accepted',
-        title: 'Trabajo aceptado',
-        message: `Has sido aceptado para el trabajo "${o.title}"`,
-        date: o.createdAt,
-        read: false
-      }));
-    }
+      // Calcular estadísticas
+      const totalSessions = sessions.length;
+      const completedSessions = sessions.filter((s: any) => s.status === 'completed').length;
+      const pendingSessions = sessions.filter((s: any) => s.status === 'pending').length;
+      const averageRating = profile.averageRating || 0;
 
-    return {
-      notifications: notifications,
-      unreadCount: notifications.filter(n => !n.read).length
-    };
+      // Calcular ganancias totales
+      const totalEarnings = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+
+      return {
+        stats: [
+          {
+            title: 'Ganancias Totales',
+            value: `$${totalEarnings}`,
+            icon: 'DollarSign',
+            color: 'green'
+          },
+          {
+            title: 'Sesiones Confirmadas',
+            value: pendingSessions.toString(),
+            icon: 'Calendar',
+            color: 'purple'
+          },
+          {
+            title: 'Calificación Promedio',
+            value: `${averageRating}⭐`,
+            icon: 'Star',
+            color: 'yellow'
+          }
+        ],
+        recentSessions: sessions.slice(0, 5),
+        totalEarnings
+      };
+    } catch (error) {
+      console.error('Error getting companion dashboard:', error);
+      throw error;
+    }
   }
-}; 
+})); 

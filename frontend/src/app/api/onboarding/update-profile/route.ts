@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
     console.log('Usuario ID:', userId);
     console.log('Rol:', role);
     console.log('Datos recibidos:', profileData);
+    console.log('Tarifa por hora:', profileData.hourlyRate);
+    console.log('Tipo de tarifa por hora:', typeof profileData.hourlyRate);
 
     // Buscar el perfil existente en Strapi
     const searchResponse = await fetch(`http://localhost:1337/api/user-profiles?filters[clerkUserId][$eq]=${userId}`);
