@@ -1,0 +1,135 @@
+{
+  "kind": "collectionType",
+  "collectionName": "user_profiles",
+  "info": {
+    "singularName": "user-profile",
+    "pluralName": "user-profiles",
+    "displayName": "User Profile",
+    "description": "Perfil de usuario para clientes y profesionales"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fullName": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100
+    },
+    "address": {
+      "type": "text",
+      "required": true
+    },
+    "profilePhoto": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": ["images"]
+    },
+    "skills": {
+      "type": "json",
+      "required": false
+    },
+    "weeklyAvailability": {
+      "type": "json",
+      "required": false
+    },
+    "hourlyRate": {
+      "type": "decimal",
+      "required": false,
+      "min": 0
+    },
+    "averageRating": {
+      "type": "decimal",
+      "required": false,
+      "default": 0,
+      "min": 0,
+      "max": 5
+    },
+    "totalHoursWorked": {
+      "type": "integer",
+      "required": false,
+      "default": 0,
+      "min": 0
+    },
+    "phone": {
+      "type": "string",
+      "required": true,
+      "maxLength": 20
+    },
+    "email": {
+      "type": "email",
+      "required": true
+    },
+    "documents": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": ["files", "images"]
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "approved", "suspended"],
+      "default": "pending",
+      "required": true
+    },
+    "role": {
+      "type": "enumeration",
+      "enum": ["client", "professional", "admin"],
+      "required": true
+    },
+    "clerkUserId": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "workZones": {
+      "type": "json",
+      "required": false
+    },
+    "bio": {
+      "type": "text",
+      "required": false
+    },
+    "dateOfBirth": {
+      "type": "date",
+      "required": false
+    },
+    "emergencyContact": {
+      "type": "component",
+      "component": "contact.emergency-contact",
+      "required": false
+    },
+    "offers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::oferta.oferta",
+      "mappedBy": "client"
+    },
+    "professionalOffers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::oferta.oferta",
+      "mappedBy": "professional"
+    },
+    "applications": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::oferta.oferta",
+      "mappedBy": "applicants"
+    },
+    "reviewsGiven": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::review.review",
+      "mappedBy": "client"
+    },
+    "reviewsReceived": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::review.review",
+      "mappedBy": "professional"
+    }
+  }
+} 

@@ -1,0 +1,33 @@
+{
+  "collectionName": "components_contact_emergency_contacts",
+  "info": {
+    "displayName": "Emergency Contact",
+    "description": "Información de contacto de emergencia"
+  },
+  "options": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100
+    },
+    "relationship": {
+      "type": "string",
+      "required": true,
+      "maxLength": 50
+    },
+    "phone": {
+      "type": "string",
+      "required": true,
+      "maxLength": 20
+    },
+    "email": {
+      "type": "email",
+      "required": false
+    },
+    "address": {
+      "type": "text",
+      "required": false
+    }
+  }
+} 

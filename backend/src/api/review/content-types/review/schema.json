@@ -1,0 +1,66 @@
+{
+  "kind": "collectionType",
+  "collectionName": "reviews",
+  "info": {
+    "singularName": "review",
+    "pluralName": "reviews",
+    "displayName": "Review",
+    "description": "Reseñas de clientes sobre profesionales"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "client": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "reviewsGiven",
+      "required": true
+    },
+    "professional": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "reviewsReceived",
+      "required": true
+    },
+    "rating": {
+      "type": "integer",
+      "required": true,
+      "min": 1,
+      "max": 5
+    },
+    "comment": {
+      "type": "text",
+      "required": true,
+      "maxLength": 1000
+    },
+    "date": {
+      "type": "datetime",
+      "required": true
+    },
+    "offer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::oferta.oferta",
+      "required": false
+    },
+    "isAnonymous": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "response": {
+      "type": "text",
+      "required": false,
+      "maxLength": 1000,
+      "description": "Respuesta del profesional a la reseña"
+    },
+    "responseDate": {
+      "type": "datetime",
+      "required": false
+    }
+  }
+} 

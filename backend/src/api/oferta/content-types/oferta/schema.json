@@ -1,0 +1,84 @@
+{
+  "kind": "collectionType",
+  "collectionName": "ofertas",
+  "info": {
+    "singularName": "oferta",
+    "pluralName": "ofertas",
+    "displayName": "Oferta",
+    "description": "Ofertas de trabajo publicadas por clientes"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "text",
+      "required": true
+    },
+    "location": {
+      "type": "text",
+      "required": true
+    },
+    "dateTime": {
+      "type": "datetime",
+      "required": true
+    },
+    "duration": {
+      "type": "integer",
+      "required": true,
+      "min": 1,
+      "description": "Duración en horas"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["published", "cancelled", "accepted", "completed"],
+      "default": "published",
+      "required": true
+    },
+    "client": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "offers"
+    },
+    "professional": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "professionalOffers"
+    },
+    "applicants": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "applications"
+    },
+    "paymentCompleted": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "stripePaymentIntentId": {
+      "type": "string",
+      "required": false
+    },
+    "specialRequirements": {
+      "type": "text",
+      "required": false
+    },
+    "createdAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "updatedAt": {
+      "type": "datetime",
+      "required": true
+    }
+  }
+} 
