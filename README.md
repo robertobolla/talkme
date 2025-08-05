@@ -1,6 +1,6 @@
-# Plataforma de Cuidadores - Irlanda
+# ElderCare Platform - Plataforma de Cuidado de Ancianos
 
-Una plataforma web completa para conectar clientes con profesionales cuidadores de personas mayores en Irlanda.
+Una plataforma web completa para conectar clientes con profesionales cuidadores de personas mayores.
 
 ## 🚀 Características
 
@@ -30,7 +30,7 @@ Una plataforma web completa para conectar clientes con profesionales cuidadores 
 
 ### Backend
 - **Strapi v5** - CMS headless y API
-- **SQLite** - Base de datos (desarrollo)
+- **PostgreSQL** - Base de datos
 - **Clerk** - Autenticación
 - **Stripe** - Procesamiento de pagos
 - **Cloudinary** - Almacenamiento de medios
@@ -56,8 +56,8 @@ Una plataforma web completa para conectar clientes con profesionales cuidadores 
 
 ### 1. Clonar el repositorio
 ```bash
-git clone <repository-url>
-cd elder-care-platform
+git clone https://github.com/robertobolla/healtapp.git
+cd healtapp
 ```
 
 ### 2. Configurar el Backend
@@ -76,8 +76,12 @@ Editar `.env` con tus credenciales:
 
 ```env
 # Database
-DATABASE_CLIENT=sqlite
-DATABASE_FILENAME=.tmp/data.db
+DATABASE_CLIENT=postgres
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=eldercare
+DATABASE_USERNAME=postgres
+DATABASE_PASSWORD=your-password
 
 # Server
 HOST=0.0.0.0
@@ -107,7 +111,7 @@ SENDGRID_API_KEY=your-sendgrid-api-key-here
 SENDGRID_FROM_EMAIL=noreply@yourdomain.com
 
 # CORS
-CORS_ORIGIN=http://localhost:3000
+CORS_ORIGIN=http://localhost:3001
 ```
 
 ### 3. Configurar el Frontend
@@ -174,7 +178,7 @@ npm run dev
 ## 📁 Estructura del Proyecto
 
 ```
-elder-care-platform/
+healtapp/
 ├── backend/                 # Strapi CMS
 │   ├── src/
 │   │   ├── api/            # Modelos y controladores
@@ -256,5 +260,5 @@ Este proyecto está bajo la Licencia MIT.
 ## 🆘 Soporte
 
 Para soporte técnico, contacta a:
-- Email: soporte@eldercare-ireland.com
-- Documentación: [docs.eldercare-ireland.com](https://docs.eldercare-ireland.com) 
+- Email: soporte@eldercare-platform.com
+- Documentación: [docs.eldercare-platform.com](https://docs.eldercare-platform.com)
