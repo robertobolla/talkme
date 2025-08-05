@@ -1,28 +1,27 @@
-# ElderCare Platform - Plataforma de Cuidado de Ancianos
+# TalkMe - Plataforma de Acompañamiento Virtual
 
-Una plataforma web completa para conectar clientes con profesionales cuidadores de personas mayores.
+Una plataforma web completa para conectar usuarios con acompañantes virtuales para sesiones de escucha y compañía.
 
 ## 🚀 Características
 
-### Para Clientes
+### Para Usuarios
 - ✅ Registro/login con Clerk
-- ✅ Publicar ofertas de trabajo
-- ✅ Filtrar profesionales por precio, rating, experiencia
-- ✅ Sistema de pagos seguro con Stripe
+- ✅ Recarga de saldo con criptomonedas (USDT)
+- ✅ Reserva de sesiones con acompañantes
+- ✅ Videochat temporizado con Daily.co
 - ✅ Sistema de reseñas y calificaciones
-- ✅ Notificaciones por email
+- ✅ Historial de sesiones y pagos
 
-### Para Profesionales
+### Para Acompañantes
 - ✅ Registro con verificación de documentos
-- ✅ Subida de documentos a Cloudinary
-- ✅ Perfil profesional con skills y disponibilidad
-- ✅ Postulación a ofertas de trabajo
-- ✅ Sistema de pagos y tracking de horas
-- ✅ Historial de trabajos y reseñas
+- ✅ Perfil profesional con especialidades
+- ✅ Gestión de disponibilidad y tarifas
+- ✅ Recepción de ganancias automáticas
+- ✅ Sistema de calificaciones y reseñas
 
 ### Para Administradores
 - ✅ Panel de administración
-- ✅ Aprobación de perfiles profesionales
+- ✅ Aprobación de perfiles de acompañantes
 - ✅ Gestión de disputas y moderación
 - ✅ Supervisión de pagos y transacciones
 
@@ -32,9 +31,8 @@ Una plataforma web completa para conectar clientes con profesionales cuidadores 
 - **Strapi v5** - CMS headless y API
 - **PostgreSQL** - Base de datos
 - **Clerk** - Autenticación
-- **Stripe** - Procesamiento de pagos
-- **Cloudinary** - Almacenamiento de medios
-- **SendGrid** - Enví de emails
+- **Daily.co** - Videochat en tiempo real
+- **Criptomonedas** - Pagos con USDT
 
 ### Frontend
 - **Next.js 15** - Framework React
@@ -49,15 +47,15 @@ Una plataforma web completa para conectar clientes con profesionales cuidadores 
 ### Prerrequisitos
 - Node.js 18+ 
 - npm o yarn
+- PostgreSQL
 - Cuenta en Clerk
-- Cuenta en Stripe
-- Cuenta en Cloudinary
-- Cuenta en SendGrid
+- Cuenta en Daily.co
+- Wallet para criptomonedas
 
 ### 1. Clonar el repositorio
 ```bash
-git clone https://github.com/robertobolla/healtapp.git
-cd healtapp
+git clone https://github.com/robertobolla/talkme.git
+cd talkme
 ```
 
 ### 2. Configurar el Backend
@@ -79,7 +77,7 @@ Editar `.env` con tus credenciales:
 DATABASE_CLIENT=postgres
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
-DATABASE_NAME=eldercare
+DATABASE_NAME=talkme
 DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=your-password
 
@@ -96,19 +94,9 @@ CLERK_JWT_KEY=your-clerk-jwt-key-here
 CLERK_ISSUER_URL=https://your-clerk-instance.clerk.accounts.dev
 CLERK_AUDIENCE=your-audience-here
 
-# Stripe
-STRIPE_SECRET_KEY=your-stripe-secret-key-here
-STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret-here
-STRIPE_PUBLISHABLE_KEY=your-stripe-publishable-key-here
-
-# Cloudinary
-CLOUDINARY_NAME=your-cloudinary-name
-CLOUDINARY_KEY=your-cloudinary-key
-CLOUDINARY_SECRET=your-cloudinary-secret
-
-# Email (SendGrid)
-SENDGRID_API_KEY=your-sendgrid-api-key-here
-SENDGRID_FROM_EMAIL=noreply@yourdomain.com
+# Daily.co
+DAILY_API_KEY=your-daily-api-key-here
+DAILY_API_URL=https://api.daily.co/v1
 
 # CORS
 CORS_ORIGIN=http://localhost:3001
@@ -136,8 +124,8 @@ CLERK_SECRET_KEY=your-clerk-secret-key-here
 # API Configuration
 NEXT_PUBLIC_API_URL=http://localhost:1337
 
-# Stripe
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=your-stripe-publishable-key-here
+# Daily.co
+NEXT_PUBLIC_DAILY_API_KEY=your-daily-api-key-here
 ```
 
 ### 4. Iniciar el desarrollo
@@ -160,28 +148,26 @@ npm run dev
 3. Configurar los dominios permitidos
 4. Obtener las claves de API
 
-### Stripe
-1. Crear cuenta en [stripe.com](https://stripe.com)
-2. Obtener las claves de API (test y live)
-3. Configurar webhooks para el endpoint `/api/payments/webhook`
+### Daily.co
+1. Crear cuenta en [daily.co](https://daily.co)
+2. Obtener la API key
+3. Configurar las salas de videochat
 
-### Cloudinary
-1. Crear cuenta en [cloudinary.com](https://cloudinary.com)
-2. Obtener las credenciales de API
-3. Configurar el preset para uploads
-
-### SendGrid
-1. Crear cuenta en [sendgrid.com](https://sendgrid.com)
-2. Verificar el dominio de email
-3. Obtener la API key
+### Criptomonedas
+1. Configurar wallet para USDT
+2. Implementar webhooks para confirmación de transacciones
+3. Configurar direcciones de depósito
 
 ## 📁 Estructura del Proyecto
 
 ```
-healtapp/
+talkme/
 ├── backend/                 # Strapi CMS
 │   ├── src/
-│   │   ├── api/            # Modelos y controladores
+│   │   ├── api/
+│   │   │   ├── session/    # Modelo de sesiones
+│   │   │   ├── payment/    # Sistema de pagos
+│   │   │   └── user-profile/ # Perfiles de usuario
 │   │   ├── components/     # Componentes reutilizables
 │   │   ├── policies/       # Políticas de autorización
 │   │   └── middlewares/    # Middlewares personalizados
@@ -215,18 +201,24 @@ npm run start
 
 ### UserProfile
 - Información personal del usuario
-- Rol (cliente, profesional, admin)
+- Rol (user, companion, admin)
+- Balance y ganancias totales
 - Estado (pendiente, aprobado, suspendido)
-- Documentos y verificaciones
+- Especialidades y idiomas
 
-### Oferta
-- Ofertas de trabajo publicadas por clientes
-- Estado y gestión de postulaciones
-- Integración con pagos
+### Session
+- Sesiones entre usuarios y acompañantes
+- Horarios y duración
+- Estado y tipo de sesión
+- Integración con Daily.co
+- Sistema de pagos
 
-### Review
-- Sistema de reseñas y calificaciones
-- Comentarios y respuestas
+### Payment
+- Sistema de balance interno
+- Depósitos y retiros
+- Pagos por sesiones
+- Ganancias de acompañantes
+- Integración con criptomonedas
 
 ## 🔐 Seguridad
 
@@ -235,15 +227,28 @@ npm run start
 - Validación de datos con Zod
 - Protección CSRF
 - Sanitización de inputs
+- Verificación de transacciones cripto
 
-## 📧 Notificaciones
+## 💰 Sistema de Pagos
 
-El sistema envía emails automáticos para:
-- Aprobación de perfiles
-- Nuevas ofertas
-- Nuevas postulaciones
-- Confirmación de pagos
-- Recordatorios de reseñas
+### Flujo de Pago
+1. Usuario recarga saldo con USDT
+2. Reserva sesión con acompañante
+3. Se descuenta saldo automáticamente
+4. Al finalizar, acompañante recibe ganancia
+5. Usuario puede retirar saldo
+
+### Comisiones
+- **Plataforma**: 20% del precio de la sesión
+- **Acompañante**: 80% del precio de la sesión
+
+## 🎥 Integración de Videochat
+
+### Daily.co
+- Salas temporizadas por sesión
+- Tokens de acceso seguros
+- Expiración automática
+- Grabación opcional
 
 ## 🤝 Contribución
 
@@ -260,5 +265,5 @@ Este proyecto está bajo la Licencia MIT.
 ## 🆘 Soporte
 
 Para soporte técnico, contacta a:
-- Email: soporte@eldercare-platform.com
-- Documentación: [docs.eldercare-platform.com](https://docs.eldercare-platform.com)
+- Email: soporte@talkme-platform.com
+- Documentación: [docs.talkme-platform.com](https://docs.talkme-platform.com)

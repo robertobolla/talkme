@@ -1,0 +1,80 @@
+{
+  "kind": "collectionType",
+  "collectionName": "payments",
+  "info": {
+    "singularName": "payment",
+    "pluralName": "payments",
+    "displayName": "Payment",
+    "description": "Sistema de pagos y balance interno"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "amount": {
+      "type": "decimal",
+      "required": true,
+      "min": 0
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": ["deposit", "withdrawal", "session_payment", "session_earning", "refund"],
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "completed", "failed", "cancelled"],
+      "default": "pending",
+      "required": true
+    },
+    "currency": {
+      "type": "string",
+      "required": true,
+      "default": "USDT",
+      "maxLength": 10
+    },
+    "transactionHash": {
+      "type": "string",
+      "required": false,
+      "maxLength": 255
+    },
+    "cryptoAddress": {
+      "type": "string",
+      "required": false,
+      "maxLength": 255
+    },
+    "description": {
+      "type": "text",
+      "required": false
+    },
+    "processedAt": {
+      "type": "datetime",
+      "required": false
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "payments"
+    },
+    "session": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::session.session",
+      "mappedBy": "payment"
+    },
+    "relatedPayment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::payment.payment",
+      "inversedBy": "relatedPayments"
+    },
+    "relatedPayments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::payment.payment",
+      "mappedBy": "relatedPayment"
+    }
+  }
+} 

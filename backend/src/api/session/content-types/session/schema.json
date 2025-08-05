@@ -1,0 +1,105 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sessions",
+  "info": {
+    "singularName": "session",
+    "pluralName": "sessions",
+    "displayName": "Session",
+    "description": "Sesiones de acompañamiento virtual entre usuarios y acompañantes"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "text",
+      "required": false
+    },
+    "startTime": {
+      "type": "datetime",
+      "required": true
+    },
+    "endTime": {
+      "type": "datetime",
+      "required": true
+    },
+    "duration": {
+      "type": "integer",
+      "required": true,
+      "min": 15,
+      "max": 480,
+      "description": "Duración en minutos"
+    },
+    "price": {
+      "type": "decimal",
+      "required": true,
+      "min": 0
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "confirmed", "in_progress", "completed", "cancelled"],
+      "default": "pending",
+      "required": true
+    },
+    "sessionType": {
+      "type": "enumeration",
+      "enum": ["video", "chat", "voice"],
+      "required": true
+    },
+    "specialty": {
+      "type": "string",
+      "required": false,
+      "maxLength": 100
+    },
+    "notes": {
+      "type": "text",
+      "required": false
+    },
+    "rating": {
+      "type": "integer",
+      "required": false,
+      "min": 1,
+      "max": 5
+    },
+    "review": {
+      "type": "text",
+      "required": false
+    },
+    "dailyRoomUrl": {
+      "type": "string",
+      "required": false
+    },
+    "dailyRoomToken": {
+      "type": "string",
+      "required": false
+    },
+    "dailyRoomExpiresAt": {
+      "type": "datetime",
+      "required": false
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "userSessions"
+    },
+    "companion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-profile.user-profile",
+      "inversedBy": "companionSessions"
+    },
+    "payment": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::payment.payment",
+      "mappedBy": "session"
+    }
+  }
+} 

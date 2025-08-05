@@ -2,8 +2,8 @@ export default {
   routes: [
     {
       method: 'GET',
-      path: '/payments',
-      handler: 'payment.find',
+      path: '/sessions',
+      handler: 'session.find',
       config: {
         policies: [],
         middlewares: [],
@@ -11,8 +11,8 @@ export default {
     },
     {
       method: 'GET',
-      path: '/payments/:id',
-      handler: 'payment.findOne',
+      path: '/sessions/:id',
+      handler: 'session.findOne',
       config: {
         policies: [],
         middlewares: [],
@@ -20,8 +20,8 @@ export default {
     },
     {
       method: 'POST',
-      path: '/payments',
-      handler: 'payment.create',
+      path: '/sessions',
+      handler: 'session.create',
       config: {
         policies: [],
         middlewares: [],
@@ -29,8 +29,8 @@ export default {
     },
     {
       method: 'PUT',
-      path: '/payments/:id',
-      handler: 'payment.update',
+      path: '/sessions/:id',
+      handler: 'session.update',
       config: {
         policies: [],
         middlewares: [],
@@ -38,8 +38,8 @@ export default {
     },
     {
       method: 'DELETE',
-      path: '/payments/:id',
-      handler: 'payment.delete',
+      path: '/sessions/:id',
+      handler: 'session.delete',
       config: {
         policies: [],
         middlewares: [],
@@ -48,8 +48,8 @@ export default {
     // Rutas personalizadas
     {
       method: 'POST',
-      path: '/payments/deposit',
-      handler: 'payment.deposit',
+      path: '/sessions/:id/confirm',
+      handler: 'session.confirm',
       config: {
         policies: [],
         middlewares: [],
@@ -57,26 +57,8 @@ export default {
     },
     {
       method: 'POST',
-      path: '/payments/withdraw',
-      handler: 'payment.withdraw',
-      config: {
-        policies: [],
-        middlewares: [],
-      },
-    },
-    {
-      method: 'GET',
-      path: '/payments/user/:userId',
-      handler: 'payment.getUserPayments',
-      config: {
-        policies: [],
-        middlewares: [],
-      },
-    },
-    {
-      method: 'GET',
-      path: '/payments/balance/:userId',
-      handler: 'payment.getUserBalance',
+      path: '/sessions/:id/start',
+      handler: 'session.start',
       config: {
         policies: [],
         middlewares: [],
@@ -84,8 +66,26 @@ export default {
     },
     {
       method: 'POST',
-      path: '/payments/confirm-transaction',
-      handler: 'payment.confirmTransaction',
+      path: '/sessions/:id/complete',
+      handler: 'session.complete',
+      config: {
+        policies: [],
+        middlewares: [],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/sessions/user/:userId',
+      handler: 'session.getUserSessions',
+      config: {
+        policies: [],
+        middlewares: [],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/sessions/companions/available',
+      handler: 'session.getAvailableCompanions',
       config: {
         policies: [],
         middlewares: [],

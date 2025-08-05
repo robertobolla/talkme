@@ -5,7 +5,7 @@
     "singularName": "user-profile",
     "pluralName": "user-profiles",
     "displayName": "User Profile",
-    "description": "Perfil de usuario para clientes y profesionales"
+    "description": "Perfil de usuario para clientes y acompañantes virtuales"
   },
   "options": {
     "draftAndPublish": false
@@ -76,7 +76,7 @@
     },
     "role": {
       "type": "enumeration",
-      "enum": ["client", "professional", "admin"],
+      "enum": ["user", "companion", "admin"],
       "required": true
     },
     "clerkUserId": {
@@ -100,6 +100,53 @@
       "type": "component",
       "component": "contact.emergency-contact",
       "required": false
+    },
+    "balance": {
+      "type": "decimal",
+      "required": false,
+      "default": 0,
+      "min": 0
+    },
+    "totalEarnings": {
+      "type": "decimal",
+      "required": false,
+      "default": 0,
+      "min": 0
+    },
+    "specialties": {
+      "type": "json",
+      "required": false
+    },
+    "languages": {
+      "type": "json",
+      "required": false
+    },
+    "isOnline": {
+      "type": "boolean",
+      "required": false,
+      "default": false
+    },
+    "lastSeen": {
+      "type": "datetime",
+      "required": false
+    },
+    "payments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::payment.payment",
+      "mappedBy": "user"
+    },
+    "userSessions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::session.session",
+      "mappedBy": "user"
+    },
+    "companionSessions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::session.session",
+      "mappedBy": "companion"
     },
     "offers": {
       "type": "relation",
