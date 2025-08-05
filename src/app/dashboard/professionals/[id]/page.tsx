@@ -26,6 +26,7 @@ interface ProfessionalProfile {
   averageRating: number;
   totalHoursWorked: number;
   dateOfBirth: string;
+  reviewsReceived?: any[];
 }
 
 export default function ProfessionalProfilePage() {
@@ -155,7 +156,21 @@ export default function ProfessionalProfilePage() {
                     <Star className="w-5 h-5 text-green-600 mr-2" />
                     <div>
                       <p className="text-sm text-gray-600">Calificación</p>
-                      <p className="text-lg font-semibold text-gray-900">{professional.averageRating}/5</p>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {professional.averageRating}/5
+                        {(professional.reviewsReceived?.length || 0) > 0 && (
+                          <span className="text-sm font-normal text-green-600 ml-2">
+                            (
+                            <button
+                              onClick={() => router.push(`/dashboard/reviews?professionalId=${professional.id}`)}
+                              className="hover:underline cursor-pointer"
+                            >
+                              {professional.reviewsReceived?.length} reviews
+                            </button>
+                            )
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>

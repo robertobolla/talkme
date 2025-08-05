@@ -29,6 +29,7 @@ interface UserProfile {
   completedJobs?: number;
   averageRating?: number;
   totalEarnings?: number;
+  reviewsReceived?: any[];
 }
 
 interface Offer {
@@ -47,8 +48,16 @@ interface Offer {
     fullName: string;
     hourlyRate: number;
   };
+  client?: {
+    id: number;
+    fullName: string;
+  };
   attributes?: {
     applicants?: any[];
+    client?: {
+      id: number;
+      fullName: string;
+    };
   };
 }
 
@@ -290,7 +299,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className={`grid gap-6 mb-8 ${isClient ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'}`}>
           <StatsCard
             icon={isClient ? Users : DollarSign}
             title={isClient ? 'Ofertas Creadas' : 'Precio por Hora'}
@@ -305,19 +314,28 @@ export default function DashboardPage() {
             color="green"
           />
 
-          <StatsCard
-            icon={isClient ? DollarSign : DollarSign}
-            title={isClient ? 'Presupuesto Total' : 'Total Facturado'}
-            value={isClient ? `$${userProfile.hourlyRate || 0}` : `$${userProfile.totalEarnings || 0}`}
-            color="yellow"
-          />
+          {!isClient && (
+            <>
+              <StatsCard
+                icon={DollarSign}
+                title="Total Facturado"
+                value={`$${userProfile.totalEarnings || 0}`}
+                color="yellow"
+              />
 
-          <StatsCard
-            icon={Star}
-            title="Calificación"
-            value={`${userProfile.averageRating || 0}/5`}
-            color="purple"
-          />
+              <StatsCard
+                icon={Star}
+                title="Calificación"
+                value={`${userProfile.averageRating || 0}/5 (${(userProfile.reviewsReceived?.length || 0)} reviews)`}
+                color="purple"
+                onClick={
+                  (userProfile.reviewsReceived?.length || 0) > 0
+                    ? () => router.push(`/dashboard/reviews`)
+                    : undefined
+                }
+              />
+            </>
+          )}
         </div>
 
         {/* Recent Offers Section */}
@@ -400,6 +418,12 @@ export default function DashboardPage() {
                             <Clock className="w-4 h-4 mr-1" />
                             {offer.duration}h
                           </div>
+                          {!isClient && offer.client && (
+                            <div className="flex items-center">
+                              <Users className="w-4 h-4 mr-1" />
+                              {offer.client.fullName}
+                            </div>
+                          )}
                           {isClient && (
                             <div className="flex items-center">
                               <Users className="w-4 h-4 mr-1" />

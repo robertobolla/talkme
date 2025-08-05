@@ -407,6 +407,14 @@ export default function OfferDetailPage() {
                     )}
                   </span>
                 </div>
+                {!isClient && offer.client && (
+                  <div className="flex items-center">
+                    <User className="w-5 h-5 text-gray-400 mr-3" />
+                    <span className="text-gray-700">
+                      Cliente: {offer.client.fullName}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

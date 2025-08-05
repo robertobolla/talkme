@@ -12,16 +12,18 @@ interface StatsCardProps {
   };
   color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
   className?: string;
+  onClick?: () => void;
 }
 
-export default function StatsCard({ 
-  icon: Icon, 
-  title, 
-  value, 
-  subtitle, 
-  trend, 
+export default function StatsCard({
+  icon: Icon,
+  title,
+  value,
+  subtitle,
+  trend,
   color = 'blue',
-  className = '' 
+  className = '',
+  onClick
 }: StatsCardProps) {
   const colorConfig = {
     blue: {
@@ -54,7 +56,10 @@ export default function StatsCard({
   const config = colorConfig[color];
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-200 ${className}`}>
+    <div
+      className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-200 ${className} ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <div className="flex items-center">
         <div className={`p-3 rounded-lg ${config.bg}`}>
           <Icon className={`w-6 h-6 ${config.icon}`} />
@@ -64,9 +69,8 @@ export default function StatsCard({
           <div className="flex items-baseline">
             <p className="text-2xl font-bold text-gray-900">{value}</p>
             {trend && (
-              <span className={`ml-2 text-sm font-medium ${
-                trend.isPositive ? 'text-green-600' : 'text-red-600'
-              }`}>
+              <span className={`ml-2 text-sm font-medium ${trend.isPositive ? 'text-green-600' : 'text-red-600'
+                }`}>
                 {trend.isPositive ? '+' : ''}{trend.value}%
               </span>
             )}
