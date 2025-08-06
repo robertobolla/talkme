@@ -100,5 +100,14 @@ export default {
         middlewares: [],
       },
     },
+    {
+      method: 'GET',
+      path: '/sessions/companion/:companionId/availability',
+      handler: 'session.getCompanionAvailability',
+      config: {
+        policies: [],
+        middlewares: [],
+      },
+    },
   ],
 }; 

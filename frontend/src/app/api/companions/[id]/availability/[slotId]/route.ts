@@ -4,10 +4,10 @@ const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
 
 export async function PUT(
     request: NextRequest,
-    { params }: { params: { id: string; slotId: string } }
+    { params }: { params: Promise<{ id: string; slotId: string }> }
 ) {
     try {
-        const { slotId } = params;
+        const { slotId } = await params;
         const body = await request.json();
 
         const response = await fetch(`${STRAPI_URL}/api/availability-slots/${slotId}`, {
@@ -37,10 +37,10 @@ export async function PUT(
 
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string; slotId: string } }
+    { params }: { params: Promise<{ id: string; slotId: string }> }
 ) {
     try {
-        const { slotId } = params;
+        const { slotId } = await params;
 
         const response = await fetch(`${STRAPI_URL}/api/availability-slots/${slotId}`, {
             method: 'DELETE',

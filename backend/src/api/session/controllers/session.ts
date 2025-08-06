@@ -1,6 +1,74 @@
 import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::session.session', ({ strapi }) => ({
+  // Función para verificar conflictos de horarios
+  async checkTimeConflicts(companionId: number, startTime: Date, endTime: Date, excludeSessionId?: number) {
+    const filters: any = {
+      companion: companionId,
+      $or: [
+        { status: 'pending' },
+        { status: 'confirmed' },
+        { status: 'in_progress' }
+      ]
+    };
+
+    if (excludeSessionId) {
+      filters.id = { $ne: excludeSessionId };
+    }
+
+    const existingSessions = await strapi.entityService.findMany('api::session.session', {
+      filters,
+      populate: ['user', 'companion']
+    });
+
+    return existingSessions.filter(session => {
+      const sessionStart = new Date(session.startTime);
+      const sessionEnd = new Date(session.endTime);
+
+      // Verificar si hay solapamiento
+      return (startTime < sessionEnd && endTime > sessionStart);
+    });
+  },
+
+  // Función para cancelar sesiones en conflicto
+  async cancelConflictingSessions(companionId: number, confirmedStartTime: Date, confirmedEndTime: Date, confirmedSessionId: number) {
+    const conflictingSessions = await this.checkTimeConflicts(companionId, confirmedStartTime, confirmedEndTime, confirmedSessionId);
+
+    console.log('Sesiones en conflicto encontradas:', conflictingSessions.length);
+
+    for (const session of conflictingSessions) {
+      console.log(`Cancelando sesión ${session.id} por conflicto de horario`);
+
+      // Actualizar estado a 'cancelled'
+      await strapi.entityService.update('api::session.session', session.id, {
+        data: { status: 'cancelled' as const }
+      });
+
+      // Devolver el saldo al usuario
+      const user = await strapi.entityService.findOne('api::user-profile.user-profile', session.user.id);
+      if (user) {
+        await strapi.entityService.update('api::user-profile.user-profile', session.user.id, {
+          data: { balance: user.balance + session.price }
+        });
+      }
+
+      // Crear registro de reembolso
+      await strapi.entityService.create('api::payment.payment', {
+        data: {
+          amount: session.price,
+          type: 'refund' as const,
+          status: 'completed' as const,
+          currency: 'USDT',
+          description: `Reembolso por conflicto de horario con sesión confirmada`,
+          user: session.user.id,
+          session: session.id
+        }
+      });
+    }
+
+    return conflictingSessions.length;
+  },
+
   // Crear una nueva sesión
   async create(ctx) {
     try {
@@ -26,6 +94,20 @@ export default factories.createCoreController('api::session.session', ({ strapi 
 
       if (user.balance < price) {
         return ctx.send({ error: 'Saldo insuficiente' }, 400);
+      }
+
+      // Verificar conflictos de horarios
+      const sessionStartTime = new Date(startTime);
+      const sessionEndTime = new Date(new Date(startTime).getTime() + duration * 60000);
+
+      const conflicts = await this.checkTimeConflicts(companionId, sessionStartTime, sessionEndTime);
+
+      if (conflicts.length > 0) {
+        console.log('Conflictos encontrados:', conflicts.length);
+        return ctx.send({
+          error: 'El horario seleccionado no está disponible. Ya existe una sesión programada en ese horario.',
+          conflicts: conflicts.length
+        }, 409);
       }
 
       // Crear la sesión
@@ -113,6 +195,17 @@ export default factories.createCoreController('api::session.session', ({ strapi 
         return ctx.send({ error: 'Acompañante no encontrado' }, 404);
       }
 
+      // Verificar y cancelar sesiones en conflicto
+      const sessionStartTime = new Date(session.startTime);
+      const sessionEndTime = new Date(session.endTime);
+
+      const cancelledCount = await this.cancelConflictingSessions(
+        companionId,
+        sessionStartTime,
+        sessionEndTime,
+        session.id
+      );
+
       // Confirmar la sesión
       await strapi.entityService.update('api::session.session', id, {
         data: { status: 'confirmed' as const }
@@ -125,7 +218,10 @@ export default factories.createCoreController('api::session.session', ({ strapi 
         }
       });
 
-      return ctx.send({ message: 'Sesión confirmada exitosamente' });
+      return ctx.send({
+        message: 'Sesión confirmada exitosamente',
+        cancelledSessions: cancelledCount
+      });
     } catch (error) {
       console.error('Error confirming session:', error);
       return ctx.send({ error: 'Error al confirmar sesión' }, 500);
@@ -136,20 +232,29 @@ export default factories.createCoreController('api::session.session', ({ strapi 
   async reject(ctx: any) {
     try {
       const { id } = ctx.params;
+      console.log('=== REJECT SESSION CALLED ===');
+      console.log('Session ID:', id);
 
-      // Obtener la sesión
-      const session = await strapi.entityService.findOne('api::session.session', id);
+      // Obtener la sesión con relaciones
+      const session = await strapi.entityService.findOne('api::session.session', id, {
+        populate: ['user', 'companion']
+      });
 
       if (!session) {
+        console.log('Session not found');
         return ctx.send({ error: 'Sesión no encontrada' }, 404);
       }
 
+      console.log('Session found:', session);
+      console.log('Session status:', session.status);
+
       if (session.status !== 'pending') {
+        console.log('Session is not pending, current status:', session.status);
         return ctx.send({ error: 'La sesión no está pendiente de confirmación' }, 400);
       }
 
       // Obtener el usuario para devolver el saldo
-      const user = await strapi.entityService.findOne('api::user-profile.user-profile', session.user);
+      const user = await strapi.entityService.findOne('api::user-profile.user-profile', (session as any).user.id);
 
       if (!user) {
         return ctx.send({ error: 'Usuario no encontrado' }, 404);
@@ -161,7 +266,7 @@ export default factories.createCoreController('api::session.session', ({ strapi 
       });
 
       // Devolver el saldo al usuario
-      await strapi.entityService.update('api::user-profile.user-profile', session.user, {
+      await strapi.entityService.update('api::user-profile.user-profile', (session as any).user.id, {
         data: { balance: user.balance + session.price }
       });
 
@@ -172,7 +277,7 @@ export default factories.createCoreController('api::session.session', ({ strapi 
         status: 'completed' as const,
         currency: 'USDT',
         description: `Reembolso por sesión rechazada`,
-        user: session.user,
+        user: (session as any).user.id,
         session: session.id
       };
 
@@ -180,6 +285,7 @@ export default factories.createCoreController('api::session.session', ({ strapi 
         data: refundPaymentData
       });
 
+      console.log('Session rejected successfully');
       return ctx.send({ message: 'Sesión rechazada exitosamente' });
     } catch (error) {
       console.error('Error rejecting session:', error);
@@ -297,6 +403,69 @@ export default factories.createCoreController('api::session.session', ({ strapi 
     } catch (error) {
       console.error('Error getting available companions:', error);
       return ctx.send({ error: 'Error al obtener acompañantes disponibles' }, 500);
+    }
+  },
+
+  // Obtener disponibilidad real de un acompañante (excluyendo sesiones confirmadas)
+  async getCompanionAvailability(ctx) {
+    try {
+      const { companionId } = ctx.params;
+      const { date } = ctx.query;
+
+      if (!companionId || !date) {
+        return ctx.send({ error: 'ID del acompañante y fecha son requeridos' }, 400);
+      }
+
+      // Obtener sesiones confirmadas del acompañante para la fecha
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const confirmedSessions = await strapi.entityService.findMany('api::session.session', {
+        filters: {
+          companion: companionId,
+          status: { $in: ['confirmed', 'in_progress'] },
+          startTime: { $gte: startOfDay.toISOString() },
+          endTime: { $lte: endOfDay.toISOString() }
+        },
+        sort: { startTime: 'asc' }
+      });
+
+      // Obtener disponibilidad configurada del acompañante
+      const availabilitySlots = await strapi.entityService.findMany('api::availability-slot.availability-slot', {
+        filters: { companion: companionId },
+        sort: { startTime: 'asc' }
+      });
+
+      // Filtrar slots de disponibilidad que no estén ocupados
+      const availableSlots = availabilitySlots.filter(slot => {
+        const slotStart = new Date(`2000-01-01T${slot.startTime}`);
+        const slotEnd = new Date(`2000-01-01T${slot.endTime}`);
+
+        // Verificar si hay sesiones confirmadas en este horario
+        const hasConflict = confirmedSessions.some(session => {
+          const sessionStart = new Date(session.startTime);
+          const sessionEnd = new Date(session.endTime);
+
+          // Convertir a la misma fecha para comparar solo horarios
+          const sessionStartTime = new Date(`2000-01-01T${sessionStart.toTimeString().slice(0, 8)}`);
+          const sessionEndTime = new Date(`2000-01-01T${sessionEnd.toTimeString().slice(0, 8)}`);
+
+          return (slotStart < sessionEndTime && slotEnd > sessionStartTime);
+        });
+
+        return !hasConflict;
+      });
+
+      return ctx.send({
+        availability: availableSlots,
+        confirmedSessions: confirmedSessions,
+        date: date
+      });
+    } catch (error) {
+      console.error('Error getting companion availability:', error);
+      return ctx.send({ error: 'Error al obtener disponibilidad del acompañante' }, 500);
     }
   }
 })); 

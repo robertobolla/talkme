@@ -9,12 +9,11 @@ export async function POST(
 ) {
     try {
         const sessionId = params.id;
-        console.log('=== REJECT SESSION ENDPOINT CALLED ===');
+        console.log('=== SIMPLE REJECT SESSION ENDPOINT CALLED ===');
         console.log('Session ID:', sessionId);
 
-                console.log('STRAPI_API_TOKEN exists:', !!STRAPI_API_TOKEN);
+        console.log('STRAPI_API_TOKEN exists:', !!STRAPI_API_TOKEN);
         console.log('STRAPI_API_TOKEN length:', STRAPI_API_TOKEN?.length);
-        console.log('STRAPI_API_TOKEN first 20 chars:', STRAPI_API_TOKEN?.substring(0, 20));
         
         if (!STRAPI_API_TOKEN) {
             console.error('STRAPI_API_TOKEN not configured');
@@ -41,7 +40,10 @@ export async function POST(
         if (!rejectResponse.ok) {
             const errorData = await rejectResponse.json();
             console.error('Strapi error response:', errorData);
-            throw new Error(errorData.error || `HTTP error! status: ${rejectResponse.status}`);
+            return NextResponse.json(
+                { error: errorData.error || `HTTP error! status: ${rejectResponse.status}` },
+                { status: rejectResponse.status }
+            );
         }
 
         const successData = await rejectResponse.json();

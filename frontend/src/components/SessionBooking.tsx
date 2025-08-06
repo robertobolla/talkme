@@ -54,6 +54,11 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   const [selectedDuration, setSelectedDuration] = useState(60);
   const [showDurationDropdown, setShowDurationDropdown] = useState<number | null>(null);
 
+  // Nuevos estados para selección manual
+  const [customDuration, setCustomDuration] = useState(60);
+  const [customStartTime, setCustomStartTime] = useState('');
+  const [showCustomForm, setShowCustomForm] = useState<number | null>(null);
+
   // Filtrar acompañantes según criterios
   useEffect(() => {
     let filtered = companions;
@@ -100,6 +105,27 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     }
   }, [currentStep.step, currentStep.selectedCompanion?.id]);
 
+  // Función para obtener disponibilidad real (excluyendo sesiones confirmadas)
+  const fetchRealAvailability = async (companionId: number, date: Date) => {
+    try {
+      const dateString = date.toISOString().split('T')[0];
+      const response = await fetch(`/api/sessions/companion/${companionId}/real-availability?date=${dateString}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('=== DISPONIBILIDAD REAL ===');
+        console.log('Datos de disponibilidad real:', data);
+        return data.availability || [];
+      } else {
+        console.error('Error obteniendo disponibilidad real:', response.status);
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching real availability:', error);
+      return [];
+    }
+  };
+
   // Actualizar horarios cuando cambia la fecha seleccionada
   useEffect(() => {
     if (currentStep.step === 'schedule' && availability.length > 0) {
@@ -116,46 +142,58 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   }, [selectedDate, availability, currentStep.step]);
 
   // Generar horarios disponibles para la fecha seleccionada
-  const getAvailableSlots = (date: Date) => {
-    const dayOfWeek = date.getDay();
-    const dateString = date.toISOString().split('T')[0];
+  const getAvailableSlots = async (date: Date): Promise<any[]> => {
+    if (!currentStep.selectedCompanion) return [];
 
-    console.log('=== DEBUG getAvailableSlots ===');
-    console.log('Fecha a buscar:', dateString);
-    console.log('Día de la semana:', dayOfWeek);
-    console.log('Disponibilidad total:', availability);
+    try {
+      // Obtener disponibilidad real (excluyendo sesiones confirmadas)
+      const realAvailability = await fetchRealAvailability(currentStep.selectedCompanion.id, date);
 
-    const filteredSlots = availability.filter(slot => {
-      console.log('Analizando slot:', slot);
+      const dayOfWeek = date.getDay();
+      const dateString = date.toISOString().split('T')[0];
 
-      if (slot.startDate && slot.endDate) {
-        // Si tiene fechas específicas
-        const slotStart = new Date(slot.startDate);
-        const slotEnd = new Date(slot.endDate);
+      console.log('=== DEBUG getAvailableSlots ===');
+      console.log('Fecha a buscar:', dateString);
+      console.log('Día de la semana:', dayOfWeek);
+      console.log('Disponibilidad real:', realAvailability);
 
-        // Normalizar las fechas para comparar solo la fecha (sin hora)
-        const slotStartDate = new Date(slotStart.getFullYear(), slotStart.getMonth(), slotStart.getDate());
-        const slotEndDate = new Date(slotEnd.getFullYear(), slotEnd.getMonth(), slotEnd.getDate());
-        const searchDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const filteredSlots = realAvailability.filter((slot: any) => {
+        console.log('Analizando slot:', slot);
 
-        const isInRange = searchDate >= slotStartDate && searchDate <= slotEndDate;
-        console.log('Fechas específicas - Inicio:', slot.startDate, 'Fin:', slot.endDate, 'En rango:', isInRange);
-        console.log('Fechas normalizadas - Inicio:', slotStartDate.toDateString(), 'Fin:', slotEndDate.toDateString(), 'Buscar:', searchDate.toDateString());
-        return isInRange;
-      } else {
-        // Si usa día de la semana
-        const isCorrectDay = slot.dayOfWeek === dayOfWeek;
-        const isActive = slot.isActive;
-        console.log('Día de semana - Día:', slot.dayOfWeek, 'Activo:', slot.isActive, 'Coincide:', isCorrectDay && isActive);
-        return isCorrectDay && isActive;
-      }
-    });
+        if (slot.startDate && slot.endDate) {
+          // Si tiene fechas específicas
+          const slotStart = new Date(slot.startDate);
+          const slotEnd = new Date(slot.endDate);
 
-    console.log('Slots filtrados:', filteredSlots);
-    return filteredSlots;
+          // Normalizar las fechas para comparar solo la fecha (sin hora)
+          const slotStartDate = new Date(slotStart.getFullYear(), slotStart.getMonth(), slotStart.getDate());
+          const slotEndDate = new Date(slotEnd.getFullYear(), slotEnd.getMonth(), slotEnd.getDate());
+          const searchDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+          const isInRange = searchDate >= slotStartDate && searchDate <= slotEndDate;
+          console.log('Fechas específicas - Inicio:', slot.startDate, 'Fin:', slot.endDate, 'En rango:', isInRange);
+          console.log('Fechas normalizadas - Inicio:', slotStartDate.toDateString(), 'Fin:', slotEndDate.toDateString(), 'Buscar:', searchDate.toDateString());
+          return isInRange;
+        } else {
+          // Si usa día de la semana
+          const isCorrectDay = slot.dayOfWeek === dayOfWeek;
+          const isActive = slot.isActive;
+          console.log('Día de semana - Día:', slot.dayOfWeek, 'Activo:', slot.isActive, 'Coincide:', isCorrectDay && isActive);
+          return isCorrectDay && isActive;
+        }
+      });
+
+      console.log('Slots filtrados:', filteredSlots);
+      return filteredSlots;
+    } catch (error) {
+      console.error('Error obteniendo slots disponibles:', error);
+      return [];
+    }
   };
 
-  const availableSlots = getAvailableSlots(selectedDate);
+  // Estado para slots disponibles
+  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   // Función para combinar slots contiguos
   const combineContiguousSlots = (slots: any[]) => {
@@ -196,17 +234,64 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
   const combinedAvailableSlots = combineContiguousSlots(availableSlots);
 
+  // Cargar slots disponibles cuando cambia la fecha o el acompañante
+  useEffect(() => {
+    const loadAvailableSlots = async () => {
+      if (currentStep.step === 'schedule' && currentStep.selectedCompanion) {
+        setLoadingSlots(true);
+        try {
+          const slots = await getAvailableSlots(selectedDate);
+          setAvailableSlots(slots);
+        } catch (error) {
+          console.error('Error loading available slots:', error);
+          setAvailableSlots([]);
+        } finally {
+          setLoadingSlots(false);
+        }
+      }
+    };
+
+    loadAvailableSlots();
+  }, [selectedDate, currentStep.step, currentStep.selectedCompanion?.id]);
+
   // Función para calcular las duraciones disponibles en un slot
-  const getAvailableDurations = (slot: any) => {
+  const getAvailableDurations = (slot: any): number[] => {
     const startTime = new Date(`2000-01-01T${slot.startTime}`);
     const endTime = new Date(`2000-01-01T${slot.endTime}`);
     const totalMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
 
-    const durations = [];
+    const durations: number[] = [];
     for (let i = 30; i <= totalMinutes; i += 30) {
       durations.push(i);
     }
     return durations;
+  };
+
+  // Función para generar opciones de hora de inicio
+  const getStartTimeOptions = (slot: any, duration: number) => {
+    const startTime = new Date(`2000-01-01T${slot.startTime}`);
+    const endTime = new Date(`2000-01-01T${slot.endTime}`);
+    const options = [];
+
+    // Generar opciones cada 15 minutos
+    let currentTime = new Date(startTime);
+    while (currentTime.getTime() + (duration * 60 * 1000) <= endTime.getTime()) {
+      const timeString = currentTime.toTimeString().slice(0, 5); // HH:mm
+      options.push(timeString);
+      currentTime.setMinutes(currentTime.getMinutes() + 15);
+    }
+
+    return options;
+  };
+
+  // Función para validar si la duración y hora de inicio son válidas
+  const isValidBooking = (slot: any, startTime: string, duration: number) => {
+    const slotStart = new Date(`2000-01-01T${slot.startTime}`);
+    const slotEnd = new Date(`2000-01-01T${slot.endTime}`);
+    const bookingStart = new Date(`2000-01-01T${startTime}`);
+    const bookingEnd = new Date(bookingStart.getTime() + (duration * 60 * 1000));
+
+    return bookingStart >= slotStart && bookingEnd <= slotEnd;
   };
 
   // Función para manejar el clic en reservar
@@ -216,22 +301,33 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     console.log('Índice del slot:', slotIndex);
 
     setSelectedSlot(slot);
-    setSelectedDuration(60); // Duración por defecto
-    setShowDurationDropdown(slotIndex);
+    setCustomDuration(60); // Duración por defecto
+    setCustomStartTime(slot.startTime.split(':').slice(0, 2).join(':')); // Hora de inicio por defecto
+    setShowCustomForm(slotIndex);
 
-    console.log('Dropdown abierto para slot:', slotIndex);
+    console.log('Formulario personalizado abierto para slot:', slotIndex);
   };
 
   // Debug: Log cuando cambian los horarios disponibles
   useEffect(() => {
-    if (currentStep.step === 'schedule' && availability.length > 0) {
+    if (currentStep.step === 'schedule' && availableSlots.length > 0) {
       console.log('Fecha seleccionada:', selectedDate.toDateString());
       console.log('Horarios disponibles (originales):', availableSlots.length);
       console.log('Horarios combinados:', combinedAvailableSlots.length);
       console.log('Horarios originales:', availableSlots);
       console.log('Horarios combinados:', combinedAvailableSlots);
     }
-  }, [selectedDate, availableSlots, combinedAvailableSlots, currentStep.step, availability.length]);
+  }, [selectedDate, availableSlots, combinedAvailableSlots, currentStep.step]);
+
+  // Actualizar hora de inicio cuando cambie la duración
+  useEffect(() => {
+    if (selectedSlot && customDuration) {
+      const startTimeOptions = getStartTimeOptions(selectedSlot, customDuration);
+      if (startTimeOptions.length > 0 && !startTimeOptions.includes(customStartTime)) {
+        setCustomStartTime(startTimeOptions[0]);
+      }
+    }
+  }, [customDuration, selectedSlot]);
 
   // Función para verificar si un día está seleccionado
   const isDateSelected = (date: Date) => {
@@ -254,6 +350,17 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       selectedDuration: duration,
       selectedType: type
     });
+  };
+
+  // Función para manejar la confirmación del formulario personalizado
+  const handleCustomBookingConfirm = (slot: any) => {
+    if (!isValidBooking(slot, customStartTime, customDuration)) {
+      alert('La duración y hora de inicio no son válidas para este horario disponible.');
+      return;
+    }
+
+    handleScheduleSelect(selectedDate, customStartTime, customDuration, 'video');
+    setShowCustomForm(null);
   };
 
   const handleConfirmBooking = async () => {
@@ -287,7 +394,11 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
         onSessionCreated();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        if (response.status === 409) {
+          alert(`Error: ${error.error}\n\nEl horario seleccionado ya no está disponible. Por favor, selecciona otro horario.`);
+        } else {
+          alert(`Error: ${error.error}`);
+        }
       }
     } catch (error) {
       console.error('Error creating session:', error);
@@ -438,6 +549,11 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
                   {loadingDateChange ? 'Actualizando horarios...' : 'Cargando disponibilidad...'}
                 </p>
               </div>
+            ) : loadingSlots ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-gray-600 mt-2">Verificando disponibilidad...</p>
+              </div>
             ) : availableSlots.length === 0 ? (
               <div className="text-center py-8">
                 <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -448,8 +564,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
                 {combinedAvailableSlots.map((slot, index) => {
                   const startTime = slot.startTime.split(':').slice(0, 2).join(':');
                   const endTime = slot.endTime.split(':').slice(0, 2).join(':');
-                  const isDropdownOpen = showDurationDropdown === index;
-                  const availableDurations = getAvailableDurations(slot);
+                  const isFormOpen = showCustomForm === index;
 
                   return (
                     <div
@@ -472,36 +587,94 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
                         </div>
                       </div>
 
-                      {/* Dropdown de duración */}
-                      {isDropdownOpen && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded-lg border">
-                          <p className="text-sm text-gray-700 mb-2 font-medium">Selecciona la duración:</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {availableDurations.map((duration) => (
-                              <button
-                                key={duration}
-                                onClick={() => {
-                                  setSelectedDuration(duration);
-                                  handleScheduleSelect(selectedDate, startTime, duration, 'video');
-                                  setShowDurationDropdown(null);
-                                }}
-                                className="p-2 text-left rounded border border-gray-200 bg-white transition-colors hover:bg-blue-50"
+                      {/* Formulario personalizado de reserva */}
+                      {showCustomForm === index && (
+                        <div className="mt-3 p-4 bg-gray-50 rounded-lg border">
+                          <p className="text-sm text-gray-700 mb-3 font-medium">Configurar sesión personalizada:</p>
+
+                          <div className="space-y-3">
+                            {/* Duración personalizada */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Duración (minutos):
+                              </label>
+                              <input
+                                type="number"
+                                min="15"
+                                max="480"
+                                step="15"
+                                value={customDuration}
+                                onChange={(e) => setCustomDuration(parseInt(e.target.value) || 60)}
+                                className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Mínimo: 15 min, Máximo: 8 horas
+                              </p>
+                            </div>
+
+                            {/* Hora de inicio */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Hora de inicio:
+                              </label>
+                              <select
+                                value={customStartTime}
+                                onChange={(e) => setCustomStartTime(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               >
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm font-medium text-gray-900">{duration} min</span>
-                                  <span className="text-xs text-gray-600">
-                                    ${((currentStep.selectedCompanion?.hourlyRate || 0) * duration / 60).toFixed(2)}
-                                  </span>
-                                </div>
+                                {getStartTimeOptions(slot, customDuration).map((time) => (
+                                  <option key={time} value={time}>
+                                    {time}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Información de precio */}
+                            <div className="bg-blue-50 p-3 rounded-lg">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-gray-900">
+                                  Duración: {customDuration} minutos
+                                </span>
+                                <span className="text-sm font-bold text-blue-600">
+                                  ${((currentStep.selectedCompanion?.hourlyRate || 0) * customDuration / 60).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-600 mt-1">
+                                Inicio: {customStartTime} | Fin: {
+                                  (() => {
+                                    const start = new Date(`2000-01-01T${customStartTime}`);
+                                    const end = new Date(start.getTime() + (customDuration * 60 * 1000));
+                                    return end.toTimeString().slice(0, 5);
+                                  })()
+                                }
+                              </div>
+                            </div>
+
+                            {/* Botones de acción */}
+                            <div className="flex space-x-2 pt-2">
+                              <button
+                                onClick={() => handleCustomBookingConfirm(slot)}
+                                disabled={!isValidBooking(slot, customStartTime, customDuration)}
+                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium"
+                              >
+                                Confirmar Reserva
                               </button>
-                            ))}
+                              <button
+                                onClick={() => setShowCustomForm(null)}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+
+                            {/* Mensaje de validación */}
+                            {!isValidBooking(slot, customStartTime, customDuration) && (
+                              <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                                ⚠️ La duración y hora de inicio no son válidas para este horario disponible.
+                              </div>
+                            )}
                           </div>
-                          <button
-                            onClick={() => setShowDurationDropdown(null)}
-                            className="mt-2 text-sm text-gray-500 hover:text-gray-700"
-                          >
-                            Cancelar
-                          </button>
                         </div>
                       )}
                     </div>
@@ -530,8 +703,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
                   {Array.from({ length: 35 }, (_, i) => {
                     const date = new Date();
                     date.setDate(date.getDate() - date.getDay() + i);
-                    const daySlots = getAvailableSlots(date);
-                    const hasAvailability = daySlots.length > 0;
+                    const hasAvailability = false; // Se calculará de forma asíncrona
                     const isCurrentMonth = date.getMonth() === new Date().getMonth();
                     const isToday = date.toDateString() === new Date().toDateString();
                     const isSelected = isDateSelected(date);
