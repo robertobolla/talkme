@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
-const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,48 +9,128 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date');
 
+    console.log('=== GET REAL AVAILABILITY ===');
+    console.log('Companion ID:', id);
+    console.log('Date:', date);
+
     if (!date) {
-      return NextResponse.json(
-        { error: 'Fecha requerida' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Fecha requerida' }, { status: 400 });
     }
+
+    const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
+    const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
     if (!STRAPI_API_TOKEN) {
-      console.error('STRAPI_API_TOKEN not configured');
-      return NextResponse.json(
-        { error: 'Token de API no configurado' },
-        { status: 500 }
-      );
+      console.error('STRAPI_API_TOKEN no está configurada');
+      return NextResponse.json({ error: 'Error de configuración' }, { status: 500 });
     }
 
-    const response = await fetch(
-      `${STRAPI_URL}/api/sessions/companion/${id}/availability?date=${date}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-        },
+    // Obtener los slots de disponibilidad del acompañante
+    const availabilityResponse = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][$eq]=${id}&sort=dayOfWeek:asc,startTime:asc`, {
+      headers: {
+        'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!availabilityResponse.ok) {
+      console.error('Error obteniendo slots de disponibilidad:', availabilityResponse.status);
+      return NextResponse.json({ error: 'Error al obtener slots de disponibilidad' }, { status: availabilityResponse.status });
+    }
+
+    const availabilityData = await availabilityResponse.json();
+    const availabilitySlots = availabilityData.data || [];
+
+    console.log('Slots de disponibilidad:', availabilitySlots);
+
+    // Obtener sesiones confirmadas para la fecha
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const sessionsResponse = await fetch(`${STRAPI_URL}/api/sessions?filters[companion][$eq]=${id}&filters[status][$in][0]=confirmed&filters[status][$in][1]=in_progress&filters[startTime][$gte]=${startOfDay.toISOString()}&filters[endTime][$lte]=${endOfDay.toISOString()}`, {
+      headers: {
+        'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!sessionsResponse.ok) {
+      console.error('Error obteniendo sesiones:', sessionsResponse.status);
+      return NextResponse.json({ error: 'Error al obtener sesiones' }, { status: sessionsResponse.status });
+    }
+
+    const sessionsData = await sessionsResponse.json();
+    const confirmedSessions = sessionsData.data || [];
+
+    console.log('Sesiones confirmadas:', confirmedSessions);
+
+    // Filtrar slots disponibles excluyendo sesiones confirmadas
+    const dayOfWeek = new Date(date).getDay();
+    const searchDate = new Date(date);
+    searchDate.setHours(0, 0, 0, 0);
+
+    const availableSlots = availabilitySlots.filter((slot: any) => {
+      console.log('Analizando slot:', slot);
+
+      // Verificar si el slot está activo
+      if (!slot.isActive) {
+        console.log('Slot no está activo');
+        return false;
       }
-    );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Strapi error response:', errorData);
-      return NextResponse.json(
-        { error: 'Error al obtener disponibilidad' },
-        { status: response.status }
-      );
-    }
+      let isSlotAvailable = false;
 
-    const data = await response.json();
-    return NextResponse.json(data);
+      if (slot.startDate && slot.endDate) {
+        // Si tiene fechas específicas
+        const slotStart = new Date(slot.startDate);
+        const slotEnd = new Date(slot.endDate);
+
+        // Normalizar las fechas para comparar solo la fecha (sin hora)
+        const slotStartDate = new Date(slotStart.getFullYear(), slotStart.getMonth(), slotStart.getDate());
+        const slotEndDate = new Date(slotEnd.getFullYear(), slotEnd.getMonth(), slotEnd.getDate());
+
+        isSlotAvailable = searchDate >= slotStartDate && searchDate <= slotEndDate;
+        console.log('Fechas específicas - Inicio:', slot.startDate, 'Fin:', slot.endDate, 'Disponible:', isSlotAvailable);
+      } else {
+        // Si usa día de la semana
+        isSlotAvailable = slot.dayOfWeek === dayOfWeek;
+        console.log('Día de semana - Día del slot:', slot.dayOfWeek, 'Día buscado:', dayOfWeek, 'Disponible:', isSlotAvailable);
+      }
+
+      if (!isSlotAvailable) {
+        return false;
+      }
+
+      // Verificar si hay sesiones confirmadas que se superponen con este slot
+      const slotStart = new Date(`2000-01-01T${slot.startTime}`);
+      const slotEnd = new Date(`2000-01-01T${slot.endTime}`);
+
+      const hasConflict = confirmedSessions.some((session: any) => {
+        const sessionStart = new Date(session.startTime);
+        const sessionEnd = new Date(session.endTime);
+
+        // Convertir a tiempo del día para comparar
+        const sessionStartTime = new Date(`2000-01-01T${sessionStart.toTimeString().slice(0, 8)}`);
+        const sessionEndTime = new Date(`2000-01-01T${sessionEnd.toTimeString().slice(0, 8)}`);
+
+        // Verificar si hay superposición
+        return sessionStartTime < slotEnd && sessionEndTime > slotStart;
+      });
+
+      console.log('Slot tiene conflicto:', hasConflict);
+      return !hasConflict;
+    });
+
+    console.log('Slots disponibles filtrados:', availableSlots);
+
+    return NextResponse.json({
+      availability: availableSlots,
+      confirmedSessions: confirmedSessions
+    });
   } catch (error) {
-    console.error('Error getting real availability:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+    console.error('Error en real-availability API:', error);
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 } 

@@ -32,25 +32,50 @@ export function useSessionReady({ sessions, userRole, userId }: UseSessionReadyP
   const [userReady, setUserReady] = useState(false);
   const [otherPartyReady, setOtherPartyReady] = useState(false);
 
-  // Encontrar sesiones que están por comenzar (5 minutos antes)
+  // Encontrar sesiones que están por comenzar (24 horas antes para testing)
   const getUpcomingSessions = useCallback(() => {
     const now = new Date();
-    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+    const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-    return sessions.filter(session => {
+    console.log('=== CHECKING UPCOMING SESSIONS ===');
+    console.log('Current time:', now.toISOString());
+    console.log('Twenty four hours from now:', twentyFourHoursFromNow.toISOString());
+    console.log('Total sessions:', sessions.length);
+
+    const upcomingSessions = sessions.filter(session => {
       const sessionTime = new Date(session.startTime);
-      return session.status === 'confirmed' &&
-        sessionTime <= fiveMinutesFromNow &&
-        sessionTime > now;
+      const isConfirmed = session.status === 'confirmed';
+      const isWithinTwentyFourHours = sessionTime <= twentyFourHoursFromNow && sessionTime > now;
+
+      console.log(`Session ${session.id}:`, {
+        startTime: session.startTime,
+        sessionTime: sessionTime.toISOString(),
+        status: session.status,
+        isConfirmed,
+        isWithinTwentyFourHours,
+        timeUntilSession: sessionTime.getTime() - now.getTime(),
+        timeUntilSessionMinutes: Math.floor((sessionTime.getTime() - now.getTime()) / (1000 * 60))
+      });
+
+      return isConfirmed && isWithinTwentyFourHours;
     });
+
+    console.log('Upcoming sessions found:', upcomingSessions.length);
+    return upcomingSessions;
   }, [sessions]);
 
   // Verificar si es hora de mostrar el modal
   useEffect(() => {
     const upcomingSessions = getUpcomingSessions();
 
+    console.log('=== CHECKING MODAL TRIGGER ===');
+    console.log('Upcoming sessions:', upcomingSessions.length);
+    console.log('Ready modal open:', readyModalOpen);
+    console.log('Video chat open:', videoChatOpen);
+
     if (upcomingSessions.length > 0 && !readyModalOpen && !videoChatOpen) {
       const session = upcomingSessions[0];
+      console.log('Opening ready modal for session:', session.id);
       setCurrentSession(session);
       setReadyModalOpen(true);
       setUserReady(false);
@@ -84,9 +109,11 @@ export function useSessionReady({ sessions, userRole, userId }: UseSessionReadyP
   useEffect(() => {
     if (userReady && otherPartyReady && currentSession) {
       setReadyModalOpen(false);
-      setVideoChatOpen(true);
+      // Abrir videochat en nueva pestaña
+      const videoChatUrl = `/dashboard/videochat/${currentSession.id}?role=${userRole}&userId=${userId}`;
+      window.open(videoChatUrl, '_blank');
     }
-  }, [userReady, otherPartyReady, currentSession]);
+  }, [userReady, otherPartyReady, currentSession, userRole, userId]);
 
   const handleReady = useCallback(async () => {
     if (!currentSession) return;
@@ -149,6 +176,15 @@ export function useSessionReady({ sessions, userRole, userId }: UseSessionReadyP
     setCurrentSession(null);
   }, []);
 
+  // Función para forzar el modal (para testing)
+  const forceOpenModal = useCallback((session: Session) => {
+    console.log('Forcing modal open for session:', session.id);
+    setCurrentSession(session);
+    setReadyModalOpen(true);
+    setUserReady(false);
+    setOtherPartyReady(false);
+  }, []);
+
   return {
     readyModalOpen,
     videoChatOpen,
@@ -158,6 +194,7 @@ export function useSessionReady({ sessions, userRole, userId }: UseSessionReadyP
     handleReady,
     handleNotReady,
     handleCloseReadyModal,
-    handleCloseVideoChat
+    handleCloseVideoChat,
+    forceOpenModal
   };
 } 

@@ -2,7 +2,7 @@ const https = require('https');
 const http = require('http');
 
 const STRAPI_URL = 'http://localhost:1337';
-const FRONTEND_URL = 'http://localhost:3000';
+const FRONTEND_URL = 'http://localhost:3003';
 
 // Función para hacer peticiones HTTP
 function makeRequest(url, options = {}) {

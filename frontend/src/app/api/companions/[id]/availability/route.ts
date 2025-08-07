@@ -1,33 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
-
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const companionId = params.id;
+        const { id } = await params;
 
-        const response = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][$eq]=${companionId}&sort=dayOfWeek:asc,startTime:asc`, {
-            method: 'GET',
+        console.log('=== GET COMPANION AVAILABILITY ===');
+        console.log('Companion ID:', id);
+
+        const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
+        const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
+
+        if (!STRAPI_API_TOKEN) {
+            console.error('STRAPI_API_TOKEN no está configurada');
+            return NextResponse.json({ error: 'Error de configuración' }, { status: 500 });
+        }
+
+        // Obtener los slots de disponibilidad del acompañante
+        const response = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][$eq]=${id}&sort=dayOfWeek:asc,startTime:asc`, {
             headers: {
+                'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
                 'Content-Type': 'application/json',
             },
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            console.error('Error obteniendo disponibilidad:', response.status, response.statusText);
+            return NextResponse.json({ error: 'Error al obtener disponibilidad' }, { status: response.status });
         }
 
         const data = await response.json();
+        console.log('Disponibilidad obtenida:', data);
+
         return NextResponse.json(data.data || []);
     } catch (error) {
-        console.error('Error fetching availability:', error);
-        return NextResponse.json(
-            { error: 'Error al obtener disponibilidad' },
-            { status: 500 }
-        );
+        console.error('Error en availability API:', error);
+        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
     }
 }
 
@@ -69,7 +79,7 @@ export async function POST(
     } catch (error) {
         console.error('Error creating availability slot:', error);
         return NextResponse.json(
-            { 
+            {
                 error: 'Error al crear horario de disponibilidad',
                 details: error instanceof Error ? error.message : 'Unknown error'
             },

@@ -52,6 +52,44 @@ module.exports = async ({ strapi }) => {
               },
             },
           },
+          'api::session.session': {
+            controllers: {
+              'api::session.session': {
+                find: { enabled: true, policy: '' },
+                findOne: { enabled: true, policy: '' },
+                create: { enabled: true, policy: '' },
+                update: { enabled: true, policy: '' },
+                delete: { enabled: true, policy: '' },
+                confirm: { enabled: true, policy: '' },
+                reject: { enabled: true, policy: '' },
+                getCompanionAvailability: { enabled: true, policy: '' },
+                getAvailableCompanions: { enabled: true, policy: '' },
+                getUserSessions: { enabled: true, policy: '' },
+              },
+            },
+          },
+          'api::availability-slot.availability-slot': {
+            controllers: {
+              'api::availability-slot.availability-slot': {
+                find: { enabled: true, policy: '' },
+                findOne: { enabled: true, policy: '' },
+                create: { enabled: true, policy: '' },
+                update: { enabled: true, policy: '' },
+                delete: { enabled: true, policy: '' },
+              },
+            },
+          },
+          'api::payment.payment': {
+            controllers: {
+              'api::payment.payment': {
+                find: { enabled: true, policy: '' },
+                findOne: { enabled: true, policy: '' },
+                create: { enabled: true, policy: '' },
+                update: { enabled: true, policy: '' },
+                delete: { enabled: true, policy: '' },
+              },
+            },
+          },
         },
       },
     });

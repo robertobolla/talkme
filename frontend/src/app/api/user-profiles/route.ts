@@ -6,6 +6,9 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
+    console.log('=== FETCHING USER PROFILES ===');
+    console.log('Search params:', searchParams.toString());
+
     // Construir la URL de Strapi directamente
     const strapiUrl = `${STRAPI_URL}/api/user-profiles?${searchParams.toString()}`;
 

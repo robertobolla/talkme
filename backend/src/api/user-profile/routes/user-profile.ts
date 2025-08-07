@@ -46,6 +46,15 @@ export default {
         auth: false,
         policies: []
       }
+    },
+    {
+      method: 'GET',
+      path: '/user-profiles/:id/availability',
+      handler: 'user-profile.getAvailability',
+      config: {
+        auth: false,
+        policies: []
+      }
     }
   ]
 }; 

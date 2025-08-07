@@ -35,9 +35,9 @@ interface UserProfile {
   balance: number;
   totalEarnings: number;
   averageRating: number;
-  hourlyRate?: number; // Added for companion hourly rate
+  hourlyRate?: number;
   status: string;
-  isOnline?: boolean; // Added for companion status
+  isOnline?: boolean;
 }
 
 interface Session {
@@ -73,25 +73,83 @@ interface Companion {
 export default function Dashboard() {
   const { user } = useUser();
   const router = useRouter();
+
+  console.log('=== DASHBOARD RENDER ===');
+  console.log('User:', user);
+  console.log('User ID:', user?.id);
+  console.log('User email:', user?.emailAddresses?.[0]?.emailAddress);
+
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [companions, setCompanions] = useState<Companion[]>([]);
   const [loading, setLoading] = useState(true);
   const [showBooking, setShowBooking] = useState(false);
-  const [bookingSession, setBookingSession] = useState<number | null>(null);
   const [showAgenda, setShowAgenda] = useState(false);
-  const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
+  const { showSuccess, showError } = useNotifications();
+
+  // Estado para filtros de sesiones
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'confirmed' | 'pending' | 'cancelled' | 'completed'>('all');
+
+  // Estado para paginación de sesiones
+  const [currentPage, setCurrentPage] = useState(1);
+  const sessionsPerPage = 10;
+
+  // Función para filtrar sesiones según el estado seleccionado
+  const getFilteredSessions = () => {
+    if (sessionFilter === 'all') {
+      return sessions;
+    }
+    return sessions.filter(session => session.status === sessionFilter);
+  };
+
+  // Función para obtener las sesiones de la página actual
+  const getCurrentPageSessions = () => {
+    const filteredSessions = getFilteredSessions();
+    const startIndex = (currentPage - 1) * sessionsPerPage;
+    const endIndex = startIndex + sessionsPerPage;
+    return filteredSessions.slice(startIndex, endIndex);
+  };
+
+  // Función para calcular el total de páginas
+  const getTotalPages = () => {
+    const filteredSessions = getFilteredSessions();
+    return Math.ceil(filteredSessions.length / sessionsPerPage);
+  };
+
+  // Función para ir a una página específica
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Función para ir a la página anterior
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Función para ir a la página siguiente
+  const goToNextPage = () => {
+    const totalPages = getTotalPages();
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Resetear paginación cuando cambie el filtro
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sessionFilter]);
 
   // Session ready logic
   const {
+    currentSession,
     readyModalOpen,
     videoChatOpen,
-    currentSession,
-    userReady,
     otherPartyReady,
+    handleCloseReadyModal,
     handleReady,
     handleNotReady,
-    handleCloseReadyModal,
     handleCloseVideoChat
   } = useSessionReady({
     sessions,
@@ -99,22 +157,9 @@ export default function Dashboard() {
     userId: userProfile?.id || 0
   });
 
-  useEffect(() => {
-    if (user) {
-      fetchUserProfile();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (userProfile) {
-      fetchSessions();
-      if (userProfile.role === 'user') {
-        fetchCompanions();
-      }
-    }
-  }, [userProfile]);
-
   const fetchUserProfile = async () => {
+    if (!user) return;
+
     try {
       console.log('Fetching user profile for email:', user?.emailAddresses[0].emailAddress);
 
@@ -153,10 +198,41 @@ export default function Dashboard() {
     if (!userProfile) return;
 
     try {
-      const response = await fetch(`/api/sessions/user/${userProfile.id}`);
+      console.log('=== FETCHING SESSIONS ===');
+      console.log('User Profile ID:', userProfile.id);
+      console.log('User Role:', userProfile.role);
+      const endpoint = userProfile.role === 'companion'
+        ? `/api/sessions/companion/${userProfile.id}`
+        : `/api/sessions/user/${userProfile.id}`;
+      console.log('Using endpoint:', endpoint);
+      const response = await fetch(endpoint);
+      console.log('Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
-        setSessions(data);
+        console.log('Sessions data:', data);
+        console.log('=== SESSIONS ORDER VERIFICATION ===');
+        console.log('Total sessions loaded:', data.data?.length || 0);
+        if (data.data && data.data.length > 0) {
+          console.log('First session (should be most recent):', {
+            id: data.data[0].id,
+            createdAt: data.data[0].createdAt,
+            title: data.data[0].title,
+            status: data.data[0].status
+          });
+          if (data.data.length > 1) {
+            console.log('Second session:', {
+              id: data.data[1].id,
+              createdAt: data.data[1].createdAt,
+              title: data.data[1].title,
+              status: data.data[1].status
+            });
+          }
+        }
+        setSessions(data.data || []);
+      } else {
+        console.error('Error response:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response body:', errorText);
       }
     } catch (error) {
       console.error('Error fetching sessions:', error);
@@ -165,54 +241,20 @@ export default function Dashboard() {
 
   const fetchCompanions = async () => {
     try {
+      console.log('=== FETCHING COMPANIONS ===');
       const response = await fetch('/api/sessions/companions/available');
+      console.log('Companions response status:', response.status);
       if (response.ok) {
         const data = await response.json();
+        console.log('Companions data:', data);
         setCompanions(data);
+      } else {
+        console.error('Error fetching companions:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response body:', errorText);
       }
     } catch (error) {
       console.error('Error fetching companions:', error);
-    }
-  };
-
-  const handleBookSession = async (companionId: number, sessionData: any) => {
-    if (!userProfile || userProfile.role !== 'user') return;
-
-    setBookingSession(companionId);
-    const loadingToast = showLoading('Reservando sesión...');
-
-    try {
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...sessionData,
-          user: userProfile.id,
-          companion: companionId
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Sesión reservada exitosamente:', data);
-
-        dismissLoading(loadingToast);
-        showSuccess('¡Sesión reservada exitosamente! 🎉', 5000);
-
-        // Recargar datos
-        fetchSessions();
-        setBookingSession(null);
-      } else {
-        const error = await response.json();
-        dismissLoading(loadingToast);
-        showError(`Error: ${error.error}`);
-      }
-    } catch (error) {
-      console.error('Error creating session:', error);
-      dismissLoading(loadingToast);
-      showError('Error al crear la sesión');
     }
   };
 
@@ -221,13 +263,25 @@ export default function Dashboard() {
     setShowBooking(false);
   };
 
+  useEffect(() => {
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (userProfile) {
+      fetchSessions();
+      if (userProfile.role === 'user') {
+        fetchCompanions();
+      }
+    }
+  }, [userProfile]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando dashboard...</p>
-        </div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -236,104 +290,78 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600">No se encontró el perfil de usuario</p>
+          <h2 className="text-2xl font-semibold text-gray-800 mb-4">Perfil no encontrado</h2>
+          <p className="text-gray-600">Por favor, completa tu perfil primero.</p>
+          <button
+            onClick={() => router.push('/onboarding')}
+            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Completar Perfil
+          </button>
         </div>
       </div>
     );
   }
 
-  const stats = [
-    {
-      title: userProfile.role === 'user' ? 'Saldo Disponible' : 'Ganancias Totales',
-      value: userProfile.role === 'user' ? `$${userProfile.balance}` : `$${userProfile.totalEarnings}`,
-      icon: DollarSign,
-      color: userProfile.role === 'user' ? 'blue' : 'green',
-      subtitle: userProfile.role === 'user' ? 'Créditos para reservar sesiones' : 'Total de sesiones completadas'
-    },
-    {
-      title: 'Sesiones Activas',
-      value: sessions.filter(s => s.status === 'confirmed' || s.status === 'in_progress').length.toString(),
-      icon: Calendar,
-      color: 'purple',
-      subtitle: userProfile.role === 'user' ? 'Sesiones programadas' : 'Sesiones confirmadas'
-    },
-    {
-      title: userProfile.role === 'user' ? 'Sesiones Completadas' : 'Calificación Promedio',
-      value: userProfile.role === 'user'
-        ? sessions.filter(s => s.status === 'completed').length.toString()
-        : `${userProfile.averageRating}⭐`,
-      icon: userProfile.role === 'user' ? Clock : Star,
-      color: userProfile.role === 'user' ? 'orange' : 'yellow',
-      subtitle: userProfile.role === 'user' ? 'Historial de sesiones' : 'Basado en reseñas'
-    },
-    // Cuarta stats card solo para acompañantes
-    ...(userProfile.role === 'companion' ? [{
-      title: 'Tarifa por Hora',
-      value: `$${userProfile.hourlyRate || 0} ✏️`,
-      icon: DollarSign,
-      color: 'pink' as any,
-      subtitle: 'Haz clic para editar tu tarifa por hora',
-      onClick: () => router.push('/dashboard/edit-profile')
-    }] : [])
-  ];
-
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Bienvenido, {userProfile.fullName}
-              </h1>
-              <p className="text-gray-600 mt-2">
-                {userProfile.role === 'user' ? 'Tu espacio personal para conectar con acompañantes' : 'Tu espacio para acompañar a otros'}
-              </p>
-            </div>
-
-            {/* Badge de rol */}
-            <div className="flex items-center space-x-2">
-              <div className={`px-4 py-2 rounded-full text-sm font-medium ${userProfile.role === 'user'
-                ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                : 'bg-pink-100 text-pink-800 border border-pink-200'
-                }`}>
-                {userProfile.role === 'user' ? '👤 Usuario' : '💝 Acompañante'}
-              </div>
-
-              {/* Estado online para acompañantes */}
-              {userProfile.role === 'companion' && (
-                <div className={`px-3 py-1 rounded-full text-xs font-medium ${userProfile.isOnline
-                  ? 'bg-green-100 text-green-800 border border-green-200'
-                  : 'bg-gray-100 text-gray-800 border border-gray-200'
-                  }`}>
-                  {userProfile.isOnline ? '🟢 En línea' : '⚫ Desconectado'}
-                </div>
-              )}
-
-              {/* Botón de editar perfil */}
-              <button
-                onClick={() => router.push('/dashboard/edit-profile')}
-                className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200 rounded-full hover:bg-gray-200 transition-colors"
-              >
-                ✏️ Editar Perfil
-              </button>
-            </div>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Bienvenido, {userProfile.fullName}
+          </h1>
+          <p className="text-gray-600">
+            {userProfile.role === 'user' ? 'Panel de Usuario' : 'Panel de Acompañante'}
+          </p>
         </div>
 
         {/* Stats Cards */}
-        <div className={`grid grid-cols-1 md:grid-cols-3 lg:grid-cols-${userProfile.role === 'companion' ? '4' : '3'} gap-6 mb-8`}>
-          {stats.map((stat, index) => (
-            <StatsCard
-              key={index}
-              title={stat.title}
-              value={stat.value}
-              icon={stat.icon}
-              color={stat.color as any}
-              subtitle={stat.subtitle}
-            />
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatsCard
+            title="Saldo"
+            value={`$${userProfile.balance} USDT`}
+            icon={DollarSign}
+            color="green"
+          />
+          {userProfile.role === 'companion' ? (
+            <>
+              <StatsCard
+                title="Ganancias Totales"
+                value={`$${userProfile.totalEarnings} USDT`}
+                icon={DollarSign}
+                color="blue"
+              />
+              <StatsCard
+                title="Tarifa por Hora"
+                value={`$${userProfile.hourlyRate || 0} USDT`}
+                icon={Clock}
+                color="purple"
+                onClick={() => router.push('/dashboard/edit-profile')}
+              />
+              <StatsCard
+                title="Calificación Promedio"
+                value={`${userProfile.averageRating} ⭐`}
+                icon={Star}
+                color="yellow"
+              />
+            </>
+          ) : (
+            <>
+              <StatsCard
+                title="Sesiones Completadas"
+                value={sessions.filter(s => s.status === 'completed').length}
+                icon={Calendar}
+                color="blue"
+              />
+              <StatsCard
+                title="Acompañantes Disponibles"
+                value={companions.length}
+                icon={Users}
+                color="green"
+              />
+            </>
+          )}
         </div>
 
         {/* Main Content */}
@@ -381,12 +409,12 @@ export default function Dashboard() {
             )}
 
             {/* Companion Agenda */}
-            {userProfile.role === 'companion' && showAgenda && (
+            {userProfile.role === 'companion' && (
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-semibold text-gray-800">Mi Agenda</h2>
                   <button
-                    onClick={() => setShowAgenda(false)}
+                    onClick={() => setShowAgenda(!showAgenda)}
                     className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                   >
                     <XCircle className="w-4 h-4 mr-2" />
@@ -400,76 +428,209 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Sessions List */}
-            {(!showAgenda || userProfile.role === 'user') && (
+            {/* Sessions List - Solo para usuarios */}
+            {(!showAgenda && userProfile.role === 'user') && (
               <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-6">
-                  {userProfile.role === 'user' ? 'Mis Sesiones' : 'Historial de Sesiones'}
-                </h2>
+                {/* Título solo para usuarios */}
+                {userProfile.role === 'user' && (
+                  <h2 className="text-xl font-semibold text-gray-800 mb-6">
+                    Mis Sesiones
+                    {sessionFilter !== 'all' && (
+                      <span className="ml-2 text-sm font-normal text-gray-500">
+                        ({getFilteredSessions().length} sesiones {sessionFilter === 'pending' ? 'pendientes' :
+                          sessionFilter === 'confirmed' ? 'confirmadas' :
+                            sessionFilter === 'completed' ? 'completadas' :
+                              sessionFilter === 'cancelled' ? 'canceladas' : ''})
+                      </span>
+                    )}
+                  </h2>
+                )}
 
-                {sessions.length === 0 ? (
+                {/* Filtros de sesiones solo para usuarios */}
+                {userProfile.role === 'user' && (
+                  <div className="mb-6">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setSessionFilter('all')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'all'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                      >
+                        Todas ({sessions.length})
+                      </button>
+                      <button
+                        onClick={() => setSessionFilter('pending')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'pending'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                      >
+                        Pendientes ({sessions.filter(s => s.status === 'pending').length})
+                      </button>
+                      <button
+                        onClick={() => setSessionFilter('confirmed')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'confirmed'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                      >
+                        Confirmadas ({sessions.filter(s => s.status === 'confirmed').length})
+                      </button>
+                      <button
+                        onClick={() => setSessionFilter('completed')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'completed'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                      >
+                        Completadas ({sessions.filter(s => s.status === 'completed').length})
+                      </button>
+                      <button
+                        onClick={() => setSessionFilter('cancelled')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'cancelled'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                      >
+                        Canceladas ({sessions.filter(s => s.status === 'cancelled').length})
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {sessions.length === 0 && userProfile.role === 'user' ? (
                   <div className="text-center py-8">
                     <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600">
-                      {userProfile.role === 'user'
-                        ? 'No tienes sesiones programadas'
-                        : 'No has recibido solicitudes de sesión'
-                      }
+                      No tienes sesiones programadas
+                    </p>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Debug: {sessions.length} sesiones cargadas
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {sessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="font-semibold text-lg text-gray-800">
-                            {session.title}
-                          </h3>
-                          <StatusBadge status={session.status} />
-                        </div>
+                    {getCurrentPageSessions().length === 0 ? (
+                      <div className="text-center py-8">
+                        <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">
+                          No hay sesiones {sessionFilter !== 'all' ? `en estado &quot;${sessionFilter}&quot;` : ''}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-2">
+                          Mostrando {getCurrentPageSessions().length} de {getFilteredSessions().length} sesiones
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {getCurrentPageSessions().map((session) => (
+                          <div
+                            key={session.id}
+                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="font-semibold text-lg text-gray-800">
+                                {session.title}
+                              </h3>
+                              <StatusBadge status={session.status} />
+                            </div>
 
-                        <div className="flex items-center text-gray-600 mb-3">
-                          <Clock className="w-4 h-4 mr-2" />
-                          <span className="text-sm">
-                            {new Date(session.startTime).toLocaleDateString()} a las{' '}
-                            {new Date(session.startTime).toLocaleTimeString()}
-                          </span>
-                        </div>
+                            <div className="flex items-center text-gray-600 mb-3">
+                              <Clock className="w-4 h-4 mr-2" />
+                              <span className="text-sm">
+                                {new Date(session.startTime).toLocaleDateString()} a las{' '}
+                                {new Date(session.startTime).toLocaleTimeString()}
+                              </span>
+                            </div>
 
-                        {/* Contador para sesiones confirmadas */}
-                        {session.status === 'confirmed' && new Date(session.startTime) > new Date() && (
-                          <div className="mb-3">
-                            <SessionCountdown startTime={session.startTime} />
+                            {/* Contador para sesiones confirmadas */}
+                            {session.status === 'confirmed' && new Date(session.startTime) > new Date() && (
+                              <div className="mb-3">
+                                <SessionCountdown startTime={session.startTime} />
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                {session.sessionType === 'video' ? (
+                                  <Video className="w-4 h-4 text-blue-600" />
+                                ) : (
+                                  <MessageCircle className="w-4 h-4 text-green-600" />
+                                )}
+                                <span className="text-sm text-gray-600 capitalize">
+                                  {session.sessionType}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center space-x-4 text-gray-600">
+                                <div className="flex items-center">
+                                  <span className="text-sm">{session.duration} min</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <DollarSign className="w-4 h-4 mr-1" />
+                                  <span className="text-sm font-medium">{session.price} USDT</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Paginación */}
+                        {getTotalPages() > 1 && (
+                          <div className="flex items-center justify-center mt-6 space-x-2">
+                            {/* Botón Anterior */}
+                            <button
+                              onClick={goToPreviousPage}
+                              disabled={currentPage === 1}
+                              className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              Anterior
+                            </button>
+
+                            {/* Números de página */}
+                            {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => {
+                              const isCurrentPage = page === currentPage;
+                              const isNearCurrent = Math.abs(page - currentPage) <= 2;
+
+                              if (isNearCurrent || page === 1 || page === getTotalPages()) {
+                                return (
+                                  <button
+                                    key={page}
+                                    onClick={() => goToPage(page)}
+                                    className={`px-3 py-2 rounded-lg transition-colors ${isCurrentPage
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                      }`}
+                                  >
+                                    {page}
+                                  </button>
+                                );
+                              } else if (page === currentPage - 3 || page === currentPage + 3) {
+                                return <span key={page} className="px-2 text-gray-500">...</span>;
+                              }
+                              return null;
+                            })}
+
+                            {/* Botón Siguiente */}
+                            <button
+                              onClick={goToNextPage}
+                              disabled={currentPage === getTotalPages()}
+                              className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              Siguiente
+                            </button>
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            {session.sessionType === 'video' ? (
-                              <Video className="w-4 h-4 text-blue-600" />
-                            ) : (
-                              <MessageCircle className="w-4 h-4 text-green-600" />
-                            )}
-                            <span className="text-sm text-gray-600 capitalize">
-                              {session.sessionType}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center space-x-4 text-gray-600">
-                            <div className="flex items-center">
-                              <span className="text-sm">{session.duration} min</span>
-                            </div>
-                            <div className="flex items-center">
-                              <DollarSign className="w-4 h-4 mr-1" />
-                              <span className="text-sm font-medium">{session.price} USDT</span>
-                            </div>
-                          </div>
+                        {/* Información de paginación */}
+                        <div className="text-center py-4">
+                          <p className="text-sm text-gray-500">
+                            Mostrando {getCurrentPageSessions().length} de {getFilteredSessions().length} sesiones
+                            {getTotalPages() > 1 && ` (Página ${currentPage} de ${getTotalPages()})`}
+                          </p>
                         </div>
-                      </div>
-                    ))}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -503,7 +664,7 @@ export default function Dashboard() {
                 ) : (
                   <>
                     <button
-                      onClick={() => setShowAgenda(true)}
+                      onClick={() => setShowAgenda(!showAgenda)}
                       className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       <Calendar className="w-4 h-4 mr-2" />
@@ -514,8 +675,6 @@ export default function Dashboard() {
                       <DollarSign className="w-4 h-4 mr-2" />
                       Retirar Ganancias
                     </button>
-
-
                   </>
                 )}
               </div>
@@ -544,7 +703,6 @@ export default function Dashboard() {
                       className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer"
                       onClick={() => {
                         setShowBooking(true);
-                        // Aquí podrías preseleccionar el acompañante
                       }}
                     >
                       <div className="flex items-center justify-between mb-2">

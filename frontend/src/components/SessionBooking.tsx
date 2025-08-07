@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Users, DollarSign, Heart, MessageCircle, Video } from 'lucide-react';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface Companion {
   id: number;
@@ -29,12 +30,13 @@ interface BookingStep {
 }
 
 export default function SessionBooking({ companions, userProfile, onSessionCreated }: SessionBookingProps) {
+  const { showSuccess, showError, showInfo, showLoading, dismissLoading } = useNotifications();
   const [currentStep, setCurrentStep] = useState<BookingStep>({ step: 'search' });
   const [filters, setFilters] = useState({
     gender: '',
     language: '',
     specialty: '',
-    duration: 60,
+    duration: 15,
     date: new Date(),
     time: ''
   });
@@ -55,7 +57,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   const [showDurationDropdown, setShowDurationDropdown] = useState<number | null>(null);
 
   // Nuevos estados para selección manual
-  const [customDuration, setCustomDuration] = useState(60);
+  const [customDuration, setCustomDuration] = useState(15);
   const [customStartTime, setCustomStartTime] = useState('');
   const [showCustomForm, setShowCustomForm] = useState<number | null>(null);
 
@@ -149,42 +151,19 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       // Obtener disponibilidad real (excluyendo sesiones confirmadas)
       const realAvailability = await fetchRealAvailability(currentStep.selectedCompanion.id, date);
 
-      const dayOfWeek = date.getDay();
-      const dateString = date.toISOString().split('T')[0];
-
       console.log('=== DEBUG getAvailableSlots ===');
-      console.log('Fecha a buscar:', dateString);
-      console.log('Día de la semana:', dayOfWeek);
-      console.log('Disponibilidad real:', realAvailability);
+      console.log('Fecha a buscar:', date.toISOString().split('T')[0]);
+      console.log('Día de la semana:', date.getDay());
+      console.log('Disponibilidad real recibida:', realAvailability);
 
-      const filteredSlots = realAvailability.filter((slot: any) => {
-        console.log('Analizando slot:', slot);
-
-        if (slot.startDate && slot.endDate) {
-          // Si tiene fechas específicas
-          const slotStart = new Date(slot.startDate);
-          const slotEnd = new Date(slot.endDate);
-
-          // Normalizar las fechas para comparar solo la fecha (sin hora)
-          const slotStartDate = new Date(slotStart.getFullYear(), slotStart.getMonth(), slotStart.getDate());
-          const slotEndDate = new Date(slotEnd.getFullYear(), slotEnd.getMonth(), slotEnd.getDate());
-          const searchDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-          const isInRange = searchDate >= slotStartDate && searchDate <= slotEndDate;
-          console.log('Fechas específicas - Inicio:', slot.startDate, 'Fin:', slot.endDate, 'En rango:', isInRange);
-          console.log('Fechas normalizadas - Inicio:', slotStartDate.toDateString(), 'Fin:', slotEndDate.toDateString(), 'Buscar:', searchDate.toDateString());
-          return isInRange;
-        } else {
-          // Si usa día de la semana
-          const isCorrectDay = slot.dayOfWeek === dayOfWeek;
-          const isActive = slot.isActive;
-          console.log('Día de semana - Día:', slot.dayOfWeek, 'Activo:', slot.isActive, 'Coincide:', isCorrectDay && isActive);
-          return isCorrectDay && isActive;
-        }
+      // La API ya debería haber filtrado los slots correctos
+      // Solo verificamos que los slots tengan los datos necesarios
+      const validSlots = realAvailability.filter((slot: any) => {
+        return slot && slot.startTime && slot.endTime && slot.isActive;
       });
 
-      console.log('Slots filtrados:', filteredSlots);
-      return filteredSlots;
+      console.log('Slots válidos:', validSlots);
+      return validSlots;
     } catch (error) {
       console.error('Error obteniendo slots disponibles:', error);
       return [];
@@ -301,7 +280,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     console.log('Índice del slot:', slotIndex);
 
     setSelectedSlot(slot);
-    setCustomDuration(60); // Duración por defecto
+    setCustomDuration(15); // Duración por defecto
     setCustomStartTime(slot.startTime.split(':').slice(0, 2).join(':')); // Hora de inicio por defecto
     setShowCustomForm(slotIndex);
 
@@ -310,6 +289,16 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
   // Debug: Log cuando cambian los horarios disponibles
   useEffect(() => {
+    console.log('=== DEBUG SESSION BOOKING ===');
+    console.log('Current step:', currentStep.step);
+    console.log('Selected companion:', currentStep.selectedCompanion?.fullName);
+    console.log('Selected date:', selectedDate.toDateString());
+    console.log('Available slots length:', availableSlots.length);
+    console.log('Combined slots length:', combinedAvailableSlots.length);
+    console.log('Loading slots:', loadingSlots);
+    console.log('Loading availability:', loadingAvailability);
+    console.log('Loading date change:', loadingDateChange);
+
     if (currentStep.step === 'schedule' && availableSlots.length > 0) {
       console.log('Fecha seleccionada:', selectedDate.toDateString());
       console.log('Horarios disponibles (originales):', availableSlots.length);
@@ -317,7 +306,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       console.log('Horarios originales:', availableSlots);
       console.log('Horarios combinados:', combinedAvailableSlots);
     }
-  }, [selectedDate, availableSlots, combinedAvailableSlots, currentStep.step]);
+  }, [selectedDate, availableSlots, combinedAvailableSlots, currentStep.step, loadingSlots, loadingAvailability, loadingDateChange]);
 
   // Actualizar hora de inicio cuando cambie la duración
   useEffect(() => {
@@ -332,6 +321,114 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   // Función para verificar si un día está seleccionado
   const isDateSelected = (date: Date) => {
     return date.toDateString() === selectedDate.toDateString();
+  };
+
+  // Estado para tracking de disponibilidad por fecha
+  const [availabilityByDate, setAvailabilityByDate] = useState<{ [key: string]: boolean }>({});
+  const [loadingCalendarAvailability, setLoadingCalendarAvailability] = useState(false);
+
+  // Función para verificar si un día tiene disponibilidad
+  const hasAvailability = (date: Date) => {
+    const dateString = date.toISOString().split('T')[0];
+    return availabilityByDate[dateString] || false;
+  };
+
+  // Función para cargar disponibilidad para un rango de fechas
+  const loadAvailabilityForMonth = async (year: number, month: number) => {
+    if (!currentStep.selectedCompanion) return;
+
+    setLoadingCalendarAvailability(true);
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 0);
+    const newAvailabilityByDate: { [key: string]: boolean } = {};
+
+    // Verificar disponibilidad para cada día del mes
+    for (let day = 1; day <= endDate.getDate(); day++) {
+      const date = new Date(year, month, day);
+      if (date >= new Date()) { // Solo fechas futuras
+        try {
+          const realAvailability = await fetchRealAvailability(currentStep.selectedCompanion.id, date);
+          newAvailabilityByDate[date.toISOString().split('T')[0]] = realAvailability.length > 0;
+        } catch (error) {
+          console.error('Error checking availability for date:', date, error);
+          newAvailabilityByDate[date.toISOString().split('T')[0]] = false;
+        }
+      }
+    }
+
+    setAvailabilityByDate(newAvailabilityByDate);
+    setLoadingCalendarAvailability(false);
+  };
+
+  // Cargar disponibilidad para el mes actual cuando cambie el acompañante o el mes
+  useEffect(() => {
+    if (currentStep.step === 'schedule' && currentStep.selectedCompanion) {
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      loadAvailabilityForMonth(year, month);
+    }
+  }, [currentStep.step, currentStep.selectedCompanion?.id, selectedDate.getFullYear(), selectedDate.getMonth()]);
+
+  // Función para generar el calendario
+  const generateCalendar = () => {
+    const today = new Date();
+    const currentMonth = selectedDate.getMonth();
+    const currentYear = selectedDate.getFullYear();
+
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+
+    const calendar = [];
+    const currentDate = new Date(startDate);
+
+    for (let week = 0; week < 6; week++) {
+      const weekDays = [];
+      for (let day = 0; day < 7; day++) {
+        const date = new Date(currentDate);
+        const isCurrentMonth = date.getMonth() === currentMonth;
+        const isToday = date.toDateString() === today.toDateString();
+        const isSelected = date.toDateString() === selectedDate.toDateString();
+        const isAvailable = hasAvailability(date);
+        const isPast = date < today;
+
+        weekDays.push({
+          date,
+          isCurrentMonth,
+          isToday,
+          isSelected,
+          isAvailable,
+          isPast
+        });
+
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      calendar.push(weekDays);
+    }
+
+    return calendar;
+  };
+
+  // Función para manejar el clic en una fecha del calendario
+  const handleDateClick = (date: Date) => {
+    if (date >= new Date()) {
+      setSelectedDate(date);
+    }
+  };
+
+  // Función para navegar al mes anterior
+  const goToPreviousMonth = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setMonth(newDate.getMonth() - 1);
+    setSelectedDate(newDate);
+  };
+
+  // Función para navegar al mes siguiente
+  const goToNextMonth = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setMonth(newDate.getMonth() + 1);
+    setSelectedDate(newDate);
   };
 
   const handleCompanionSelect = (companion: Companion) => {
@@ -355,7 +452,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   // Función para manejar la confirmación del formulario personalizado
   const handleCustomBookingConfirm = (slot: any) => {
     if (!isValidBooking(slot, customStartTime, customDuration)) {
-      alert('La duración y hora de inicio no son válidas para este horario disponible.');
+      showError('La duración y hora de inicio no son válidas para este horario disponible.', 4000);
       return;
     }
 
@@ -363,9 +460,33 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     setShowCustomForm(null);
   };
 
+  // Función para mostrar toast de confirmación detallado
+  const showBookingConfirmationToast = (companionName: string, date: Date, time: string, duration: number) => {
+    const formattedDate = date.toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    showInfo(
+      `🎉 ¡Solicitud de reserva enviada exitosamente!\n\n` +
+      `📋 Detalles de tu solicitud:\n` +
+      `👤 Acompañante: ${companionName}\n` +
+      `📅 Fecha: ${formattedDate}\n` +
+      `🕐 Hora: ${time}\n` +
+      `⏱️ Duración: ${duration} minutos\n\n` +
+      `⏳ Estado: Pendiente de confirmación\n` +
+      `📱 Te notificaremos cuando el acompañante confirme o rechace tu solicitud.\n\n` +
+      `💡 Consejo: Puedes revisar el estado de tu solicitud en tu dashboard.`,
+      10000
+    );
+  };
+
   const handleConfirmBooking = async () => {
     if (!currentStep.selectedCompanion || !currentStep.selectedDate || !currentStep.selectedTime) return;
 
+    const loadingToast = showLoading('Procesando tu solicitud de reserva...');
     setLoading(true);
 
     try {
@@ -373,36 +494,62 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       const [hours, minutes] = currentStep.selectedTime.split(':');
       startTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
+      const sessionData = {
+        user: userProfile.id,
+        companion: currentStep.selectedCompanion.id,
+        startTime: startTime.toISOString(),
+        duration: currentStep.selectedDuration || 15,
+        sessionType: currentStep.selectedType || 'video',
+        specialty: 'general',
+        notes: `Sesión de videochat con ${currentStep.selectedCompanion.fullName}`
+      };
+
+      console.log('=== CREATING SESSION ===');
+      console.log('Session data:', sessionData);
+      console.log('Duration:', sessionData.duration);
+
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          user: userProfile.id,
-          companion: currentStep.selectedCompanion.id,
-          startTime: startTime.toISOString(),
-          duration: currentStep.selectedDuration || 60,
-          sessionType: currentStep.selectedType || 'video',
-          specialty: 'general',
-          notes: `Sesión de videochat con ${currentStep.selectedCompanion.fullName}`
-        }),
+        body: JSON.stringify(sessionData),
       });
 
       if (response.ok) {
+        dismissLoading(loadingToast);
+        showSuccess('¡Solicitud de reserva enviada exitosamente!', 6000);
+
+        // Mostrar toast informativo detallado sobre el proceso
+        setTimeout(() => {
+          showBookingConfirmationToast(
+            currentStep.selectedCompanion?.fullName || 'el acompañante',
+            currentStep.selectedDate!,
+            currentStep.selectedTime!,
+            currentStep.selectedDuration || 15
+          );
+        }, 1000);
+
         setCurrentStep({ step: 'success' });
         onSessionCreated();
       } else {
         const error = await response.json();
+        dismissLoading(loadingToast);
+
         if (response.status === 409) {
-          alert(`Error: ${error.error}\n\nEl horario seleccionado ya no está disponible. Por favor, selecciona otro horario.`);
+          showError(
+            `El horario seleccionado ya no está disponible.\n\n` +
+            `Por favor, selecciona otro horario o intenta con una fecha diferente.`,
+            6000
+          );
         } else {
-          alert(`Error: ${error.error}`);
+          showError(`Error al crear la sesión: ${error.error}`, 5000);
         }
       }
     } catch (error) {
       console.error('Error creating session:', error);
-      alert('Error al crear la sesión');
+      dismissLoading(loadingToast);
+      showError('Error al crear la sesión. Por favor, intenta nuevamente.', 5000);
     } finally {
       setLoading(false);
     }
@@ -458,6 +605,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
               onChange={(e) => setFilters({ ...filters, duration: parseInt(e.target.value) })}
               className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
+              <option value={15}>15 minutos</option>
               <option value={30}>30 minutos</option>
               <option value={60}>1 hora</option>
               <option value={90}>1.5 horas</option>
@@ -555,12 +703,13 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
                 <p className="text-gray-600 mt-2">Verificando disponibilidad...</p>
               </div>
             ) : availableSlots.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-8 bg-gray-50 rounded-lg">
                 <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No hay disponibilidad para esta fecha</p>
+                <p className="text-gray-600 font-medium">No hay disponibilidad para esta fecha</p>
+                <p className="text-gray-500 text-sm mt-1">Intenta seleccionar otra fecha</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {combinedAvailableSlots.map((slot, index) => {
                   const startTime = slot.startTime.split(':').slice(0, 2).join(':');
                   const endTime = slot.endTime.split(':').slice(0, 2).join(':');
@@ -569,19 +718,22 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
                   return (
                     <div
                       key={index}
-                      className="w-full p-3 text-left border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                      className="w-full p-4 text-left border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">{startTime} - {endTime}</span>
+                        <div className="flex items-center space-x-3">
+                          <Clock className="w-5 h-5 text-blue-600" />
+                          <span className="font-medium text-gray-900 text-lg">{startTime} - {endTime}</span>
+                        </div>
                         <div className="flex space-x-2">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleReserveClick(slot, index);
                             }}
-                            className="flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm hover:bg-blue-200"
+                            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                           >
-                            <Video className="w-4 h-4 mr-1" />
+                            <Video className="w-4 h-4 mr-2" />
                             Reservar
                           </button>
                         </div>
@@ -589,13 +741,13 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
                       {/* Formulario personalizado de reserva */}
                       {showCustomForm === index && (
-                        <div className="mt-3 p-4 bg-gray-50 rounded-lg border">
-                          <p className="text-sm text-gray-700 mb-3 font-medium">Configurar sesión personalizada:</p>
+                        <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <p className="text-sm text-blue-800 mb-4 font-medium">Configurar sesión personalizada:</p>
 
-                          <div className="space-y-3">
+                          <div className="space-y-4">
                             {/* Duración personalizada */}
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Duración (minutos):
                               </label>
                               <input
@@ -604,8 +756,8 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
                                 max="480"
                                 step="15"
                                 value={customDuration}
-                                onChange={(e) => setCustomDuration(parseInt(e.target.value) || 60)}
-                                className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                onChange={(e) => setCustomDuration(parseInt(e.target.value) || 15)}
+                                className="w-full p-3 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               />
                               <p className="text-xs text-gray-500 mt-1">
                                 Mínimo: 15 min, Máximo: 8 horas
@@ -614,13 +766,13 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
                             {/* Hora de inicio */}
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Hora de inicio:
                               </label>
                               <select
                                 value={customStartTime}
                                 onChange={(e) => setCustomStartTime(e.target.value)}
-                                className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full p-3 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               >
                                 {getStartTimeOptions(slot, customDuration).map((time) => (
                                   <option key={time} value={time}>
@@ -630,39 +782,18 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
                               </select>
                             </div>
 
-                            {/* Información de precio */}
-                            <div className="bg-blue-50 p-3 rounded-lg">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-gray-900">
-                                  Duración: {customDuration} minutos
-                                </span>
-                                <span className="text-sm font-bold text-blue-600">
-                                  ${((currentStep.selectedCompanion?.hourlyRate || 0) * customDuration / 60).toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="text-xs text-gray-600 mt-1">
-                                Inicio: {customStartTime} | Fin: {
-                                  (() => {
-                                    const start = new Date(`2000-01-01T${customStartTime}`);
-                                    const end = new Date(start.getTime() + (customDuration * 60 * 1000));
-                                    return end.toTimeString().slice(0, 5);
-                                  })()
-                                }
-                              </div>
-                            </div>
-
                             {/* Botones de acción */}
-                            <div className="flex space-x-2 pt-2">
+                            <div className="flex space-x-3 pt-2">
                               <button
                                 onClick={() => handleCustomBookingConfirm(slot)}
                                 disabled={!isValidBooking(slot, customStartTime, customDuration)}
-                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium"
+                                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition-colors"
                               >
                                 Confirmar Reserva
                               </button>
                               <button
                                 onClick={() => setShowCustomForm(null)}
-                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm"
+                                className="px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm transition-colors"
                               >
                                 Cancelar
                               </button>
@@ -670,7 +801,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
                             {/* Mensaje de validación */}
                             {!isValidBooking(slot, customStartTime, customDuration) && (
-                              <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                              <div className="text-xs text-red-600 bg-red-50 p-3 rounded-lg border border-red-200">
                                 ⚠️ La duración y hora de inicio no son válidas para este horario disponible.
                               </div>
                             )}
@@ -687,63 +818,85 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
         {/* Mapa de disponibilidad */}
         <div className="mt-6">
-          <h4 className="text-md font-medium text-gray-900 mb-3">Mapa de disponibilidad</h4>
-          <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-md font-medium text-gray-900 mb-3">Calendario de disponibilidad</h4>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-start space-x-6">
               {/* Calendario */}
-              <div className="flex-1 max-w-none">
+              <div className="flex-1">
+                {/* Navegación del mes */}
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    onClick={goToPreviousMonth}
+                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    ←
+                  </button>
+                  <div className="flex items-center space-x-2">
+                    <h5 className="text-lg font-semibold text-gray-900">
+                      {selectedDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                    </h5>
+                    {loadingCalendarAvailability && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    )}
+                  </div>
+                  <button
+                    onClick={goToNextMonth}
+                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    →
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-7 gap-1 mb-2">
                   {['D', 'L', 'M', 'X', 'J', 'V', 'S'].map((day) => (
-                    <div key={day} className="text-center text-xs font-medium text-gray-800">
+                    <div key={day} className="text-center text-xs font-medium text-gray-800 p-1">
                       {day}
                     </div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-1">
-                  {Array.from({ length: 35 }, (_, i) => {
-                    const date = new Date();
-                    date.setDate(date.getDate() - date.getDay() + i);
-                    const hasAvailability = false; // Se calculará de forma asíncrona
-                    const isCurrentMonth = date.getMonth() === new Date().getMonth();
-                    const isToday = date.toDateString() === new Date().toDateString();
-                    const isSelected = isDateSelected(date);
-
-                    return (
+                  {generateCalendar().map((week, weekIndex) => (
+                    week.map((day, dayIndex) => (
                       <div
-                        key={i}
-                        className={`p-1 text-center text-xs border border-gray-200 min-h-[20px] flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors ${!isCurrentMonth ? 'text-gray-400' :
-                          isSelected ? 'bg-blue-200 text-blue-900 font-bold border-blue-400' :
-                            isToday ? 'bg-blue-100 text-blue-800 font-bold' :
+                        key={`${weekIndex}-${dayIndex}`}
+                        className={`p-2 text-center text-xs border border-gray-200 min-h-[32px] flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors ${!day.isCurrentMonth ? 'text-gray-400 bg-gray-50' :
+                          day.isSelected ? 'bg-blue-200 text-blue-900 font-bold border-blue-400' :
+                            day.isToday ? 'bg-blue-100 text-blue-800 font-bold' :
                               'text-gray-800'
-                          }`}
-                        onClick={() => {
-                          if (isCurrentMonth) {
-                            setSelectedDate(date);
-                            // Forzar actualización inmediata de horarios
-                            setLoadingDateChange(true);
-                            setTimeout(() => {
-                              setLoadingDateChange(false);
-                            }, 200);
-                          }
-                        }}
+                          } ${day.isPast ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        onClick={() => handleDateClick(day.date)}
                       >
-                        <span className="mb-1">{date.getDate()}</span>
-                        {hasAvailability && isCurrentMonth && (
-                          <div className="w-1 h-1 rounded-full bg-green-500"></div>
+                        <span className="text-sm font-medium">{day.date.getDate()}</span>
+                        {day.isAvailable && day.isCurrentMonth && (
+                          <div className="w-2 h-2 rounded-full bg-green-500 mt-1"></div>
                         )}
                       </div>
-                    );
-                  })}
+                    ))
+                  ))}
                 </div>
               </div>
 
               {/* Referencia al lado */}
-              <div className="flex flex-col space-y-2 text-xs w-48 flex-shrink-0">
-                <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
+              <div className="flex flex-col space-y-3 text-xs w-48 flex-shrink-0">
+                <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg">
                   <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></div>
                   <div>
                     <span className="font-medium text-gray-900">Disponible</span>
                     <p className="text-gray-700">Horarios libres</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-3 h-3 rounded-full bg-blue-200 flex-shrink-0"></div>
+                  <div>
+                    <span className="font-medium text-gray-900">Hoy</span>
+                    <p className="text-gray-700">Fecha actual</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-3 h-3 rounded-full bg-blue-600 flex-shrink-0"></div>
+                  <div>
+                    <span className="font-medium text-gray-900">Seleccionado</span>
+                    <p className="text-gray-700">Fecha elegida</p>
                   </div>
                 </div>
               </div>

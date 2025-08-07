@@ -65,27 +65,9 @@ export default {
       },
     },
     {
-      method: 'POST',
-      path: '/sessions/:id/start',
-      handler: 'session.start',
-      config: {
-        policies: [],
-        middlewares: [],
-      },
-    },
-    {
-      method: 'POST',
-      path: '/sessions/:id/complete',
-      handler: 'session.complete',
-      config: {
-        policies: [],
-        middlewares: [],
-      },
-    },
-    {
       method: 'GET',
-      path: '/sessions/user/:userId',
-      handler: 'session.getUserSessions',
+      path: '/sessions/companion/:companionId/availability',
+      handler: 'session.getCompanionAvailability',
       config: {
         policies: [],
         middlewares: [],
@@ -102,8 +84,8 @@ export default {
     },
     {
       method: 'GET',
-      path: '/sessions/companion/:companionId/availability',
-      handler: 'session.getCompanionAvailability',
+      path: '/sessions/user/:userId',
+      handler: 'session.getUserSessions',
       config: {
         policies: [],
         middlewares: [],

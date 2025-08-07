@@ -1,23 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
-const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
 export async function GET(request: NextRequest) {
     try {
-        if (!STRAPI_API_TOKEN) {
-            console.error('STRAPI_API_TOKEN not configured');
-            return NextResponse.json(
-                { error: 'Token de API no configurado' },
-                { status: 500 }
-            );
-        }
+        console.log('=== FETCHING AVAILABLE COMPANIONS ===');
 
-        const response = await fetch(`${STRAPI_URL}/api/sessions/companions/available`, {
+        // Obtener todos los user-profiles que son companions
+        const response = await fetch(`${STRAPI_URL}/api/user-profiles?filters[role][$eq]=companion&populate=*`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
             },
         });
 
@@ -28,8 +21,22 @@ export async function GET(request: NextRequest) {
         }
 
         const data = await response.json();
-        console.log('Available companions from Strapi:', data);
-        return NextResponse.json(data);
+        console.log('Companions from user-profiles:', data);
+
+        // Transformar los datos para que coincidan con el formato esperado
+        const companions = data.data?.map((profile: any) => ({
+            id: profile.id,
+            fullName: profile.fullName,
+            hourlyRate: profile.hourlyRate || 0,
+            specialties: profile.specialties || [],
+            languages: profile.languages || [],
+            bio: profile.bio || '',
+            averageRating: profile.averageRating || 0,
+            isOnline: profile.isOnline || false
+        })) || [];
+
+        console.log('Transformed companions:', companions);
+        return NextResponse.json(companions);
     } catch (error) {
         console.error('Error fetching available companions:', error);
         return NextResponse.json(

@@ -85,5 +85,26 @@ export default factories.createCoreController('api::user-profile.user-profile', 
             console.error('Error in user-profile.delete:', error);
             ctx.throw(400, 'Error al eliminar el perfil');
         }
+    },
+
+    // Obtener disponibilidad de un acompañante
+    async getAvailability(ctx) {
+        try {
+            const { id } = ctx.params;
+            
+            // Obtener los slots de disponibilidad del acompañante
+            const availabilitySlots = await strapi.entityService.findMany('api::availability-slot.availability-slot', {
+                filters: {
+                    companion: id,
+                    isActive: true
+                },
+                sort: { dayOfWeek: 'asc', startTime: 'asc' }
+            });
+
+            return { data: availabilitySlots };
+        } catch (error) {
+            console.error('Error getting companion availability:', error);
+            ctx.throw(500, 'Error al obtener disponibilidad del acompañante');
+        }
     }
 })); 
