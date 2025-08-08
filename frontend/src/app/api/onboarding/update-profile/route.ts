@@ -52,7 +52,11 @@ export async function POST(request: NextRequest) {
             skills: profileData.skills,
             workZones: profileData.workZones,
             emergencyContact: profileData.emergencyContact,
-            dateOfBirth: profileData.dateOfBirth
+            dateOfBirth: profileData.dateOfBirth,
+            timezone: profileData.timezone,
+            interests: profileData.interests,
+            languages: profileData.languages,
+            profilePhoto: profileData.profilePhoto
           }
         }),
       });
@@ -93,6 +97,10 @@ export async function POST(request: NextRequest) {
             workZones: profileData.workZones,
             emergencyContact: profileData.emergencyContact,
             dateOfBirth: profileData.dateOfBirth,
+            timezone: profileData.timezone,
+            interests: profileData.interests,
+            languages: profileData.languages,
+            profilePhoto: profileData.profilePhoto,
             status: 'approved'
           }
         }),

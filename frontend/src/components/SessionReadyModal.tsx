@@ -71,6 +71,17 @@ export default function SessionReadyModal({
     return () => clearInterval(timer);
   }, [session.startTime]);
 
+  // Cerrar modal automáticamente si la sesión ya pasó
+  useEffect(() => {
+    if (isExpired) {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 3000); // Cerrar después de 3 segundos si la sesión ya pasó
+
+      return () => clearTimeout(timer);
+    }
+  }, [isExpired, onClose]);
+
   if (!isOpen) return null;
 
   const formatTime = (hours: number, minutes: number, seconds: number) => {
@@ -83,17 +94,23 @@ export default function SessionReadyModal({
     }
   };
 
-  const otherPartyName = userRole === 'user' 
-    ? session.companion?.fullName 
+  const otherPartyName = userRole === 'user'
+    ? session.companion?.fullName
     : session.user?.fullName;
+
+  const handleClose = () => {
+    console.log('Modal close button clicked');
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 relative">
         {/* Close button */}
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+          onClick={handleClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label="Cerrar modal"
         >
           <X className="w-5 h-5" />
         </button>
@@ -106,7 +123,7 @@ export default function SessionReadyModal({
               ¡Tu sesión está lista!
             </h2>
           </div>
-          
+
           <p className="text-gray-600">
             {userRole === 'user' ? 'Tu acompañante' : 'Tu cliente'} está esperando
           </p>
@@ -115,7 +132,7 @@ export default function SessionReadyModal({
         {/* Session Info */}
         <div className="bg-gray-50 rounded-lg p-4 mb-6">
           <h3 className="font-semibold text-gray-900 mb-2">{session.title}</h3>
-          
+
           <div className="space-y-2 text-sm text-gray-600">
             <div className="flex items-center">
               <Clock className="w-4 h-4 mr-2" />
@@ -124,7 +141,7 @@ export default function SessionReadyModal({
                 {new Date(session.startTime).toLocaleTimeString()}
               </span>
             </div>
-            
+
             <div className="flex items-center">
               <span className="mr-4">
                 <strong>Duración:</strong> {session.duration} minutos
@@ -182,6 +199,14 @@ export default function SessionReadyModal({
           >
             <AlertCircle className="w-5 h-5 mr-2" />
             Necesito más tiempo
+          </button>
+
+          {/* Botón adicional para cerrar */}
+          <button
+            onClick={handleClose}
+            className="w-full flex items-center justify-center px-4 py-2 text-gray-500 hover:text-gray-700 text-sm"
+          >
+            Cerrar
           </button>
         </div>
 

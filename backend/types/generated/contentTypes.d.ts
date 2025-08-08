@@ -839,6 +839,7 @@ export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
         },
         number
       >;
+    interests: Schema.Attribute.JSON;
     isOnline: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     languages: Schema.Attribute.JSON;
     lastSeen: Schema.Attribute.DateTime;
@@ -873,6 +874,10 @@ export interface ApiUserProfileUserProfile extends Struct.CollectionTypeSchema {
     status: Schema.Attribute.Enumeration<['pending', 'approved', 'suspended']> &
       Schema.Attribute.Required &
       Schema.Attribute.DefaultTo<'pending'>;
+    timezone: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 50;
+      }>;
     totalEarnings: Schema.Attribute.Decimal &
       Schema.Attribute.SetMinMax<
         {

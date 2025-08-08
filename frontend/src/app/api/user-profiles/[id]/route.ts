@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { userId } = await auth();
@@ -12,7 +12,7 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const profileId = params.id;
+    const { id: profileId } = await params;
 
     console.log('=== OBTENIENDO PERFIL POR ID ===');
     console.log('Usuario autenticado:', userId);

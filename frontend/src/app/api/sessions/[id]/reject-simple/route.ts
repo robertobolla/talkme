@@ -5,16 +5,16 @@ const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const sessionId = params.id;
+        const { id: sessionId } = await params;
         console.log('=== SIMPLE REJECT SESSION ENDPOINT CALLED ===');
         console.log('Session ID:', sessionId);
 
         console.log('STRAPI_API_TOKEN exists:', !!STRAPI_API_TOKEN);
         console.log('STRAPI_API_TOKEN length:', STRAPI_API_TOKEN?.length);
-        
+
         if (!STRAPI_API_TOKEN) {
             console.error('STRAPI_API_TOKEN not configured');
             return NextResponse.json(

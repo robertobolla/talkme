@@ -1,0 +1,205 @@
+warning: in the working copy of 'frontend/src/components/CompanionAgenda.tsx', CRLF will be replaced by LF the next time Git touches it
+[1mdiff --git a/frontend/src/components/CompanionAgenda.tsx b/frontend/src/components/CompanionAgenda.tsx[m
+[1mindex 2f18ece..be9d3f6 100644[m
+[1m--- a/frontend/src/components/CompanionAgenda.tsx[m
+[1m+++ b/frontend/src/components/CompanionAgenda.tsx[m
+[36m@@ -58,6 +58,9 @@[m [mexport default function CompanionAgenda({ companionId, userProfile }: CompanionA[m
+   const [loading, setLoading] = useState(true);[m
+   const [activeTab, setActiveTab] = useState<'sessions' | 'availability'>('sessions');[m
+   const [showAddSlot, setShowAddSlot] = useState(false);[m
+[32m+[m[32m  const [sessionFilter, setSessionFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');[m
+[32m+[m[32m  const [currentPage, setCurrentPage] = useState(1);[m
+[32m+[m[32m  const sessionsPerPage = 10;[m
+   const [newSlot, setNewSlot] = useState<Omit<AvailabilitySlot, 'id'>>({[m
+     dayOfWeek: 1,[m
+     startTime: '09:00',[m
+[36m@@ -90,6 +93,53 @@[m [mexport default function CompanionAgenda({ companionId, userProfile }: CompanionA[m
+     return time.split(':').slice(0, 2).join(':');[m
+   };[m
+ [m
+[32m+[m[32m  // Función para filtrar sesiones según el estado seleccionado[m
+[32m+[m[32m  const getFilteredSessions = () => {[m
+[32m+[m[32m    if (sessionFilter === 'all') {[m
+[32m+[m[32m      return sessions;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    return sessions.filter(session => session.status === sessionFilter);[m
+[32m+[m[32m  };[m
+[32m+[m
+[32m+[m[32m  // Función para obtener las sesiones de la página actual[m
+[32m+[m[32m  const getCurrentPageSessions = () => {[m
+[32m+[m[32m    const filteredSessions = getFilteredSessions();[m
+[32m+[m[32m    const startIndex = (currentPage - 1) * sessionsPerPage;[m
+[32m+[m[32m    const endIndex = startIndex + sessionsPerPage;[m
+[32m+[m[32m    return filteredSessions.slice(startIndex, endIndex);[m
+[32m+[m[32m  };[m
+[32m+[m
+[32m+[m[32m  // Función para calcular el total de páginas[m
+[32m+[m[32m  const getTotalPages = () => {[m
+[32m+[m[32m    const filteredSessions = getFilteredSessions();[m
+[32m+[m[32m    return Math.ceil(filteredSessions.length / sessionsPerPage);[m
+[32m+[m[32m  };[m
+[32m+[m
+[32m+[m[32m  // Función para ir a una página específica[m
+[32m+[m[32m  const goToPage = (page: number) => {[m
+[32m+[m[32m    setCurrentPage(page);[m
+[32m+[m[32m  };[m
+[32m+[m
+[32m+[m[32m  // Función para ir a la página anterior[m
+[32m+[m[32m  const goToPreviousPage = () => {[m
+[32m+[m[32m    if (currentPage > 1) {[m
+[32m+[m[32m      setCurrentPage(currentPage - 1);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  };[m
+[32m+[m
+[32m+[m[32m  // Función para ir a la página siguiente[m
+[32m+[m[32m  const goToNextPage = () => {[m
+[32m+[m[32m    const totalPages = getTotalPages();[m
+[32m+[m[32m    if (currentPage < totalPages) {[m
+[32m+[m[32m      setCurrentPage(currentPage + 1);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  };[m
+[32m+[m
+[32m+[m[32m  // Resetear paginación cuando cambie el filtro[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    setCurrentPage(1);[m
+[32m+[m[32m  }, [sessionFilter]);[m
+[32m+[m
+   // Función para generar el calendario del mes[m
+   const generateCalendar = () => {[m
+     const year = currentDate.getFullYear();[m
+[36m@@ -550,14 +600,70 @@[m [mexport default function CompanionAgenda({ companionId, userProfile }: CompanionA[m
+ [m
+       {activeTab === 'sessions' && ([m
+         <div>[m
+[31m-          {sessions.length === 0 ? ([m
+[32m+[m[32m          {/* Filtros de sesiones */}[m
+[32m+[m[32m          <div className="mb-6">[m
+[32m+[m[32m            <div className="flex flex-wrap gap-2">[m
+[32m+[m[32m              <button[m
+[32m+[m[32m                onClick={() => setSessionFilter('all')}[m
+[32m+[m[32m                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'all'[m
+[32m+[m[32m                  ? 'bg-blue-600 text-white'[m
+[32m+[m[32m                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'[m
+[32m+[m[32m                  }`}[m
+[32m+[m[32m              >[m
+[32m+[m[32m                Todas ({sessions.length})[m
+[32m+[m[32m              </button>[m
+[32m+[m[32m              <button[m
+[32m+[m[32m                onClick={() => setSessionFilter('pending')}[m
+[32m+[m[32m                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'pending'[m
+[32m+[m[32m                  ? 'bg-yellow-600 text-white'[m
+[32m+[m[32m                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'[m
+[32m+[m[32m                  }`}[m
+[32m+[m[32m              >[m
+[32m+[m[32m                Pendientes ({sessions.filter(s => s.status === 'pending').length})[m
+[32m+[m[32m              </button>[m
+[32m+[m[32m              <button[m
+[32m+[m[32m                onClick={() => setSessionFilter('confirmed')}[m
+[32m+[m[32m                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'confirmed'[m
+[32m+[m[32m                  ? 'bg-green-600 text-white'[m
+[32m+[m[32m                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'[m
+[32m+[m[32m                  }`}[m
+[32m+[m[32m              >[m
+[32m+[m[32m                Confirmadas ({sessions.filter(s => s.status === 'confirmed').length})[m
+[32m+[m[32m              </button>[m
+[32m+[m[32m              <button[m
+[32m+[m[32m                onClick={() => setSessionFilter('completed')}[m
+[32m+[m[32m                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'completed'[m
+[32m+[m[32m                  ? 'bg-purple-600 text-white'[m
+[32m+[m[32m                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'[m
+[32m+[m[32m                  }`}[m
+[32m+[m[32m              >[m
+[32m+[m[32m                Completadas ({sessions.filter(s => s.status === 'completed').length})[m
+[32m+[m[32m              </button>[m
+[32m+[m[32m              <button[m
+[32m+[m[32m                onClick={() => setSessionFilter('cancelled')}[m
+[32m+[m[32m                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'cancelled'[m
+[32m+[m[32m                  ? 'bg-red-600 text-white'[m
+[32m+[m[32m                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'[m
+[32m+[m[32m                  }`}[m
+[32m+[m[32m              >[m
+[32m+[m[32m                Canceladas ({sessions.filter(s => s.status === 'cancelled').length})[m
+[32m+[m[32m              </button>[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          {getFilteredSessions().length === 0 ? ([m
+             <div className="text-center py-8">[m
+               <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />[m
+[31m-              <p className="text-gray-600">No tienes sesiones programadas</p>[m
+[32m+[m[32m              <p className="text-gray-600">[m
+[32m+[m[32m                {sessions.length === 0[m
+[32m+[m[32m                  ? 'No tienes sesiones programadas'[m
+[32m+[m[32m                  : `No hay sesiones ${sessionFilter !== 'all' ? `en estado "${sessionFilter}"` : ''}`[m
+[32m+[m[32m                }[m
+[32m+[m[32m              </p>[m
+             </div>[m
+           ) : ([m
+             <div className="space-y-4">[m
+[31m-              {sessions.map((session) => ([m
+[32m+[m[32m              {getCurrentPageSessions().map((session) => ([m
+                 <div[m
+                   key={session.id}[m
+                   className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"[m
+[36m@@ -605,6 +711,61 @@[m [mexport default function CompanionAgenda({ companionId, userProfile }: CompanionA[m
+                   </div>[m
+                 </div>[m
+               ))}[m
+[32m+[m
+[32m+[m[32m              {/* Paginación */}[m
+[32m+[m[32m              {getTotalPages() > 1 && ([m
+[32m+[m[32m                <div className="flex items-center justify-center mt-6 space-x-2">[m
+[32m+[m[32m                  {/* Botón Anterior */}[m
+[32m+[m[32m                  <button[m
+[32m+[m[32m                    onClick={goToPreviousPage}[m
+[32m+[m[32m                    disabled={currentPage === 1}[m
+[32m+[m[32m                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"[m
+[32m+[m[32m                  >[m
+[32m+[m[32m                    Anterior[m
+[32m+[m[32m                  </button>[m
+[32m+[m
+[32m+[m[32m                  {/* Números de página */}[m
+[32m+[m[32m                  {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => {[m
+[32m+[m[32m                    const isCurrentPage = page === currentPage;[m
+[32m+[m[32m                    const isNearCurrent = Math.abs(page - currentPage) <= 2;[m
+[32m+[m
+[32m+[m[32m                    if (isNearCurrent || page === 1 || page === getTotalPages()) {[m
+[32m+[m[32m                      return ([m
+[32m+[m[32m                        <button[m
+[32m+[m[32m                          key={page}[m
+[32m+[m[32m                          onClick={() => goToPage(page)}[m
+[32m+[m[32m                          className={`px-3 py-2 rounded-lg transition-colors ${isCurrentPage[m
+[32m+[m[32m                            ? 'bg-blue-600 text-white'[m
+[32m+[m[32m                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'[m
+[32m+[m[32m                            }`}[m
+[32m+[m[32m                        >[m
+[32m+[m[32m                          {page}[m
+[32m+[m[32m                        </button>[m
+[32m+[m[32m                      );[m
+[32m+[m[32m                    } else if (page === currentPage - 3 || page === currentPage + 3) {[m
+[32m+[m[32m                      return <span key={page} className="px-2 text-gray-500">...</span>;[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                    return null;[m
+[32m+[m[32m                  })}[m
+[32m+[m
+[32m+[m[32m                  {/* Botón Siguiente */}[m
+[32m+[m[32m                  <button[m
+[32m+[m[32m                    onClick={goToNextPage}[m
+[32m+[m[32m                    disabled={currentPage === getTotalPages()}[m
+[32m+[m[32m                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"[m
+[32m+[m[32m                  >[m
+[32m+[m[32m                    Siguiente[m
+[32m+[m[32m                  </button>[m
+[32m+[m[32m                </div>[m
+[32m+[m[32m              )}[m
+[32m+[m
+[32m+[m[32m              {/* Información de paginación */}[m
+[32m+[m[32m              <div className="text-center py-4">[m
+[32m+[m[32m                <p className="text-sm text-gray-500">[m
+[32m+[m[32m                  Mostrando {getCurrentPageSessions().length} de {getFilteredSessions().length} sesiones[m
+[32m+[m[32m                  {getTotalPages() > 1 && ` (Página ${currentPage} de ${getTotalPages()})`}[m
+[32m+[m[32m                </p>[m
+[32m+[m[32m              </div>[m
+             </div>[m
+           )}[m
+         </div>[m

@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Users, CheckCircle, XCircle, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, Users, Plus, X, ChevronLeft, ChevronRight, Video, MessageCircle, DollarSign, CheckCircle, XCircle, Trash2, RefreshCw } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import SessionCountdown from './SessionCountdown';
+import StatusBadge from './StatusBadge';
+import Link from 'next/link';
 
 interface UserProfile {
   id: number;
@@ -58,6 +61,9 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'sessions' | 'availability'>('sessions');
   const [showAddSlot, setShowAddSlot] = useState(false);
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const sessionsPerPage = 10;
   const [newSlot, setNewSlot] = useState<Omit<AvailabilitySlot, 'id'>>({
     dayOfWeek: 1,
     startTime: '09:00',
@@ -72,6 +78,27 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
   // Estado para el calendario
   const [currentDate, setCurrentDate] = useState(new Date());
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
+
+  // Estado para rastrear sesiones que ya han mostrado notificación
+  const [notifiedSessions, setNotifiedSessions] = useState<Set<number>>(new Set());
+  const [lastSessionCount, setLastSessionCount] = useState<number>(0);
+  const [hasNotifiedForNewSessions, setHasNotifiedForNewSessions] = useState<boolean>(false);
+  const [notificationShown, setNotificationShown] = useState<boolean>(false);
+
+  // Función simple para verificar si ya se mostró la notificación
+  const hasShownNotification = () => {
+    return localStorage.getItem(`notification_${companionId}`) === 'true';
+  };
+
+  // Función simple para marcar que se mostró la notificación
+  const markNotificationAsShown = () => {
+    localStorage.setItem(`notification_${companionId}`, 'true');
+  };
+
+  // Función simple para limpiar la notificación
+  const clearNotification = () => {
+    localStorage.removeItem(`notification_${companionId}`);
+  };
 
   const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
 
@@ -89,6 +116,53 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
     // Si el tiempo viene en formato HH:mm:ss.SSS, solo tomar HH:mm
     return time.split(':').slice(0, 2).join(':');
   };
+
+  // Función para filtrar sesiones según el estado seleccionado
+  const getFilteredSessions = () => {
+    if (sessionFilter === 'all') {
+      return sessions;
+    }
+    return sessions.filter(session => session.status === sessionFilter);
+  };
+
+  // Función para obtener las sesiones de la página actual
+  const getCurrentPageSessions = () => {
+    const filteredSessions = getFilteredSessions();
+    const startIndex = (currentPage - 1) * sessionsPerPage;
+    const endIndex = startIndex + sessionsPerPage;
+    return filteredSessions.slice(startIndex, endIndex);
+  };
+
+  // Función para calcular el total de páginas
+  const getTotalPages = () => {
+    const filteredSessions = getFilteredSessions();
+    return Math.ceil(filteredSessions.length / sessionsPerPage);
+  };
+
+  // Función para ir a una página específica
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Función para ir a la página anterior
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Función para ir a la página siguiente
+  const goToNextPage = () => {
+    const totalPages = getTotalPages();
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Resetear paginación cuando cambie el filtro
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sessionFilter]);
 
   // Función para generar el calendario del mes
   const generateCalendar = () => {
@@ -198,6 +272,47 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
     fetchAvailability();
   }, [companionId]);
 
+  // Polling para actualizar sesiones automáticamente
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('=== POLLING SESIONES ===');
+      console.log('Companion ID:', companionId);
+      console.log('Current sessions count:', sessions.length);
+      console.log('Notified sessions count:', notifiedSessions.size);
+
+      fetchSessions();
+    }, 3000); // Verificar cada 3 segundos para mayor responsividad
+
+    return () => clearInterval(interval);
+  }, [companionId]); // Removí las dependencias que causaban re-creación del intervalo
+
+  // Función para limpiar notificaciones cuando se monta el componente
+  useEffect(() => {
+    // Limpiar notificación al montar el componente
+    clearNotification();
+
+    // Hacer una verificación inmediata
+    const immediateCheck = setTimeout(() => {
+      console.log('=== VERIFICACIÓN INMEDIATA ===');
+      fetchSessions();
+    }, 1000);
+
+    return () => clearTimeout(immediateCheck);
+  }, [companionId]);
+
+  // Detectar cuando el usuario regresa a la página y forzar actualización
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('=== PÁGINA VISIBLE - ACTUALIZANDO SESIONES ===');
+        forceUpdateSessions();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [companionId]);
+
   useEffect(() => {
     generateCalendar();
   }, [currentDate, sessions, availability]);
@@ -219,11 +334,56 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
       const response = await fetch(`/api/sessions/companion/${companionId}/all`);
       if (response.ok) {
         const data = await response.json();
+
+        // Detectar nuevas sesiones pendientes
+        const currentPendingSessions = data.filter((s: Session) => s.status === 'pending');
+        const newPendingSessions = currentPendingSessions.filter((session: Session) =>
+          !sessions.some(existingSession => existingSession.id === session.id)
+        );
+
+        // Si hay nuevas sesiones y no hemos notificado, mostrar notificación
+        if (newPendingSessions.length > 0 && !hasShownNotification()) {
+          const firstNewSession = newPendingSessions[0];
+          console.log('=== NUEVA SOLICITUD DETECTADA ===');
+          console.log('Session ID:', firstNewSession.id);
+          console.log('User:', firstNewSession.user?.fullName);
+
+          showSuccess(`¡Nueva solicitud de sesión recibida de ${firstNewSession.user?.fullName || 'un usuario'}!`);
+          markNotificationAsShown();
+        }
+
+        // Actualizar las sesiones
         setSessions(data);
+
+        console.log('=== SESIONES ACTUALIZADAS ===');
+        console.log('Total sessions:', data.length);
+        console.log('Pending sessions:', currentPendingSessions.length);
+        console.log('New sessions:', newPendingSessions.length);
       }
     } catch (error) {
       console.error('Error fetching sessions:', error);
     }
+  };
+
+  // Función para forzar actualización inmediata
+  const forceUpdateSessions = async () => {
+    console.log('=== FORZAR ACTUALIZACIÓN ===');
+    try {
+      const response = await fetch(`/api/sessions/companion/${companionId}/all`);
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data);
+        console.log('Sesiones actualizadas inmediatamente:', data.length);
+      }
+    } catch (error) {
+      console.error('Error en actualización forzada:', error);
+    }
+  };
+
+  // Función para limpiar notificaciones de sesiones que ya no están pendientes
+  const cleanupNotifications = (currentSessions: Session[]) => {
+    console.log('=== LIMPIEZA DE NOTIFICACIONES ===');
+    console.log('Notification shown:', hasShownNotification());
   };
 
   const fetchAvailability = async () => {
@@ -427,6 +587,64 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
     });
   };
 
+  const handleAcceptSession = async (sessionId: number) => {
+    const loadingToast = showLoading('Aceptando solicitud...');
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/accept`, {
+        method: 'POST',
+      });
+      if (response.ok) {
+        showSuccess('Solicitud aceptada');
+        clearNotification();
+        fetchSessions();
+      } else {
+        const errorText = await response.text().catch(() => '');
+        let errorMsg = 'Error al aceptar la sesión';
+        try {
+          const parsed = JSON.parse(errorText);
+          errorMsg = parsed?.error || errorText || errorMsg;
+        } catch {
+          if (errorText) errorMsg = errorText;
+        }
+        showError(`Error: ${errorMsg}`);
+      }
+    } catch (error) {
+      console.error('Error accepting session:', error);
+      showError('Error al aceptar solicitud');
+    } finally {
+      dismissLoading(loadingToast);
+    }
+  };
+
+  const handleRejectSession = async (sessionId: number) => {
+    const loadingToast = showLoading('Rechazando solicitud...');
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/reject`, {
+        method: 'POST',
+      });
+      if (response.ok) {
+        showSuccess('Solicitud rechazada');
+        clearNotification();
+        fetchSessions();
+      } else {
+        const errorText = await response.text().catch(() => '');
+        let errorMsg = 'Error al rechazar la sesión';
+        try {
+          const parsed = JSON.parse(errorText);
+          errorMsg = parsed?.error || errorText || errorMsg;
+        } catch {
+          if (errorText) errorMsg = errorText;
+        }
+        showError(`Error: ${errorMsg}`);
+      }
+    } catch (error) {
+      console.error('Error rejecting session:', error);
+      showError('Error al rechazar solicitud');
+    } finally {
+      dismissLoading(loadingToast);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -550,31 +768,89 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
 
       {activeTab === 'sessions' && (
         <div>
-          {sessions.length === 0 ? (
-            <div className="text-center py-8">
-              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No tienes sesiones programadas</p>
+          {/* Filtros de sesiones */}
+          <div className="mb-6">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSessionFilter('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+              >
+                Todas ({sessions.length})
+              </button>
+              <button
+                onClick={() => setSessionFilter('pending')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'pending'
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+              >
+                Pendientes ({sessions.filter(s => s.status === 'pending').length})
+              </button>
+              <button
+                onClick={() => setSessionFilter('confirmed')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'confirmed'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+              >
+                Confirmadas ({sessions.filter(s => s.status === 'confirmed').length})
+              </button>
+              <button
+                onClick={() => setSessionFilter('completed')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'completed'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+              >
+                Completadas ({sessions.filter(s => s.status === 'completed').length})
+              </button>
+              <button
+                onClick={() => setSessionFilter('cancelled')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sessionFilter === 'cancelled'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+              >
+                Canceladas ({sessions.filter(s => s.status === 'cancelled').length})
+              </button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-gray-800">{session.title}</h4>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getSessionStatusColor(session.status)}`}>
-                      {session.status === 'pending' && 'Pendiente'}
-                      {session.status === 'confirmed' && 'Confirmada'}
-                      {session.status === 'in_progress' && 'En Progreso'}
-                      {session.status === 'completed' && 'Completada'}
-                      {session.status === 'cancelled' && 'Cancelada'}
-                    </span>
-                  </div>
+          </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                    <div className="flex items-center text-gray-600">
+          {/* Sección de Solicitudes Pendientes */}
+          {sessions.filter(s => s.status === 'pending').length > 0 && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-yellow-800">
+                  Solicitudes Pendientes ({sessions.filter(s => s.status === 'pending').length})
+                </h3>
+                <span className="text-sm text-yellow-600">
+                  Necesitan tu confirmación
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {sessions.filter(s => s.status === 'pending').map((session) => (
+                  <div
+                    key={session.id}
+                    className="bg-white border border-yellow-300 rounded-lg p-4"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-gray-800">
+                        Sesión con{' '}
+                        <Link
+                          href={`/dashboard/professionals/${session.user?.id}`}
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          {session.user?.fullName || 'Usuario'}
+                        </Link>
+                      </h4>
+                      <StatusBadge status={session.status} />
+                    </div>
+
+                    <div className="flex items-center text-gray-600 mb-3">
                       <Clock className="w-4 h-4 mr-2" />
                       <span className="text-sm">
                         {new Date(session.startTime).toLocaleDateString()} a las{' '}
@@ -582,29 +858,175 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
                       </span>
                     </div>
 
-                    <div className="flex items-center text-gray-600">
-                      <Users className="w-4 h-4 mr-2" />
-                      <span className="text-sm">
-                        {session.user?.fullName || 'Usuario'}
-                      </span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        {session.sessionType === 'video' ? (
+                          <Video className="w-4 h-4 text-blue-600" />
+                        ) : (
+                          <MessageCircle className="w-4 h-4 text-green-600" />
+                        )}
+                        <span className="text-sm text-gray-600 capitalize">
+                          {session.sessionType}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-4 text-gray-600">
+                        <div className="flex items-center">
+                          <span className="text-sm">{session.duration} min</span>
+                        </div>
+                        <div className="flex items-center">
+                          <DollarSign className="w-4 h-4 mr-1" />
+                          <span className="text-sm font-medium">{session.price} USDT</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex space-x-2 mt-3">
+                      <button
+                        onClick={() => handleAcceptSession(session.id)}
+                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                      >
+                        <CheckCircle className="w-4 h-4 inline mr-2" />
+                        Aceptar
+                      </button>
+                      <button
+                        onClick={() => handleRejectSession(session.id)}
+                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                      >
+                        <XCircle className="w-4 h-4 inline mr-2" />
+                        Rechazar
+                      </button>
                     </div>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {getFilteredSessions().length === 0 ? (
+            <div className="text-center py-8">
+              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">
+                {sessions.length === 0
+                  ? 'No tienes sesiones programadas'
+                  : `No hay sesiones ${sessionFilter !== 'all' ? `en estado "${sessionFilter}"` : ''}`
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {getCurrentPageSessions().map((session) => (
+                <div
+                  key={session.id}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-lg text-gray-800">
+                      Sesión con{' '}
+                      <Link
+                        href={`/dashboard/professionals/${session.user?.id}`}
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        {session.user?.fullName || 'Usuario'}
+                      </Link>
+                    </h3>
+                    <StatusBadge status={session.status} />
+                  </div>
+
+                  <div className="flex items-center text-gray-600 mb-3">
+                    <Clock className="w-4 h-4 mr-2" />
+                    <span className="text-sm">
+                      {new Date(session.startTime).toLocaleDateString()} a las{' '}
+                      {new Date(session.startTime).toLocaleTimeString()}
+                    </span>
+                  </div>
+
+                  {/* Contador para sesiones confirmadas */}
+                  {session.status === 'confirmed' && new Date(session.startTime) > new Date() && (
+                    <div className="mb-3">
+                      <SessionCountdown startTime={session.startTime} />
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm text-gray-600">{session.duration} min</span>
-                      <span className="text-sm text-gray-600">•</span>
-                      <span className="text-sm text-gray-600">${session.price} USDT</span>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
+                      {session.sessionType === 'video' ? (
+                        <Video className="w-4 h-4 text-blue-600" />
+                      ) : (
+                        <MessageCircle className="w-4 h-4 text-green-600" />
+                      )}
                       <span className="text-sm text-gray-600 capitalize">
                         {session.sessionType}
                       </span>
                     </div>
+
+                    <div className="flex items-center space-x-4 text-gray-600">
+                      <div className="flex items-center">
+                        <span className="text-sm">{session.duration} min</span>
+                      </div>
+                      <div className="flex items-center">
+                        <DollarSign className="w-4 h-4 mr-1" />
+                        <span className="text-sm font-medium">{session.price} USDT</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
+
+              {/* Paginación */}
+              {getTotalPages() > 1 && (
+                <div className="flex items-center justify-center mt-6 space-x-2">
+                  {/* Botón Anterior */}
+                  <button
+                    onClick={goToPreviousPage}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Anterior
+                  </button>
+
+                  {/* Números de página */}
+                  {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => {
+                    const isCurrentPage = page === currentPage;
+                    const isNearCurrent = Math.abs(page - currentPage) <= 2;
+
+                    if (isNearCurrent || page === 1 || page === getTotalPages()) {
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => goToPage(page)}
+                          className={`px-3 py-2 rounded-lg transition-colors ${isCurrentPage
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    } else if (page === currentPage - 3 || page === currentPage + 3) {
+                      return <span key={page} className="px-2 text-gray-500">...</span>;
+                    }
+                    return null;
+                  })}
+
+                  {/* Botón Siguiente */}
+                  <button
+                    onClick={goToNextPage}
+                    disabled={currentPage === getTotalPages()}
+                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              )}
+
+              {/* Información de paginación */}
+              <div className="text-center py-4">
+                <p className="text-sm text-gray-500">
+                  Mostrando {getCurrentPageSessions().length} de {getFilteredSessions().length} sesiones
+                  {getTotalPages() > 1 && ` (Página ${currentPage} de ${getTotalPages()})`}
+                </p>
+              </div>
             </div>
           )}
         </div>

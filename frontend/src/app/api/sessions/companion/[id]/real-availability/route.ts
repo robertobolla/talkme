@@ -26,7 +26,7 @@ export async function GET(
     }
 
     // Obtener los slots de disponibilidad del acompañante
-    const availabilityResponse = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][$eq]=${id}&sort=dayOfWeek:asc,startTime:asc`, {
+    const availabilityResponse = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][id][$eq]=${id}&sort=dayOfWeek:asc,startTime:asc`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json',
@@ -49,7 +49,7 @@ export async function GET(
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const sessionsResponse = await fetch(`${STRAPI_URL}/api/sessions?filters[companion][$eq]=${id}&filters[status][$in][0]=confirmed&filters[status][$in][1]=in_progress&filters[startTime][$gte]=${startOfDay.toISOString()}&filters[endTime][$lte]=${endOfDay.toISOString()}`, {
+    const sessionsResponse = await fetch(`${STRAPI_URL}/api/sessions?filters[companion][id][$eq]=${id}&filters[status][$in][0]=confirmed&filters[status][$in][1]=in_progress&filters[startTime][$gte]=${startOfDay.toISOString()}&filters[endTime][$lte]=${endOfDay.toISOString()}`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json',

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Calendar,
   Clock,
@@ -14,7 +15,8 @@ import {
   Star,
   Plus,
   Search,
-  XCircle
+  XCircle,
+  User
 } from 'lucide-react';
 import StatsCard from '@/components/StatsCard';
 import StatusBadge from '@/components/StatusBadge';
@@ -85,7 +87,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showBooking, setShowBooking] = useState(false);
   const [showAgenda, setShowAgenda] = useState(false);
-  const { showSuccess, showError } = useNotifications();
+  const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
 
   // Estado para filtros de sesiones
   const [sessionFilter, setSessionFilter] = useState<'all' | 'confirmed' | 'pending' | 'cancelled' | 'completed'>('all');
@@ -93,6 +95,9 @@ export default function Dashboard() {
   // Estado para paginación de sesiones
   const [currentPage, setCurrentPage] = useState(1);
   const sessionsPerPage = 10;
+
+  // Estado para rastrear sesiones que ya han mostrado notificación
+  const [notifiedSessions, setNotifiedSessions] = useState<Set<number>>(new Set());
 
   // Función para filtrar sesiones según el estado seleccionado
   const getFilteredSessions = () => {
@@ -147,10 +152,13 @@ export default function Dashboard() {
     readyModalOpen,
     videoChatOpen,
     otherPartyReady,
+    modalDisabled,
     handleCloseReadyModal,
     handleReady,
     handleNotReady,
-    handleCloseVideoChat
+    handleCloseVideoChat,
+    forceCloseModal,
+    toggleModalDisabled
   } = useSessionReady({
     sessions,
     userRole: userProfile?.role || 'user',
@@ -228,7 +236,36 @@ export default function Dashboard() {
             });
           }
         }
-        setSessions(data.data || []);
+
+        const newSessions = data.data || [];
+
+        // Detectar cambios de estado en las sesiones
+        if (userProfile.role === 'user') {
+          newSessions.forEach((session: Session) => {
+            const existingSession = sessions.find(s => s.id === session.id);
+
+            // Si la sesión existe y el estado cambió
+            if (existingSession && existingSession.status !== session.status) {
+              const sessionKey = `${session.id}-${session.status}`;
+
+              // Solo mostrar notificación si no se ha mostrado antes
+              if (!notifiedSessions.has(session.id)) {
+                if (session.status === 'confirmed') {
+                  showSuccess(`¡Tu sesión con ${session.companion?.fullName || 'el acompañante'} ha sido confirmada!`);
+                  setNotifiedSessions(prev => new Set([...prev, session.id]));
+                } else if (session.status === 'cancelled') {
+                  showError(`Tu sesión con ${session.companion?.fullName || 'el acompañante'} ha sido cancelada.`);
+                  setNotifiedSessions(prev => new Set([...prev, session.id]));
+                } else if (session.status === 'completed') {
+                  showSuccess(`Tu sesión con ${session.companion?.fullName || 'el acompañante'} ha sido completada.`);
+                  setNotifiedSessions(prev => new Set([...prev, session.id]));
+                }
+              }
+            }
+          });
+        }
+
+        setSessions(newSessions);
       } else {
         console.error('Error response:', response.status, response.statusText);
         const errorText = await response.text();
@@ -278,6 +315,17 @@ export default function Dashboard() {
     }
   }, [userProfile]);
 
+  // Polling para actualizar sesiones automáticamente (solo para usuarios)
+  useEffect(() => {
+    if (userProfile && userProfile.role === 'user') {
+      const interval = setInterval(() => {
+        fetchSessions();
+      }, 10000); // Verificar cada 10 segundos
+
+      return () => clearInterval(interval);
+    }
+  }, [userProfile]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -308,12 +356,23 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Bienvenido, {userProfile.fullName}
-          </h1>
-          <p className="text-gray-600">
-            {userProfile.role === 'user' ? 'Panel de Usuario' : 'Panel de Acompañante'}
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Bienvenido, {userProfile.fullName}
+              </h1>
+              <p className="text-gray-600">
+                {userProfile.role === 'user' ? 'Panel de Usuario' : 'Panel de Acompañante'}
+              </p>
+            </div>
+            <button
+              onClick={() => router.push('/dashboard/edit-profile')}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+            >
+              <User className="w-4 h-4 mr-2" />
+              Editar Perfil
+            </button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -530,7 +589,13 @@ export default function Dashboard() {
                           >
                             <div className="flex items-center justify-between mb-3">
                               <h3 className="font-semibold text-lg text-gray-800">
-                                {session.title}
+                                Sesión con{' '}
+                                <Link
+                                  href={`/dashboard/professionals/${session.companion?.id}`}
+                                  className="text-blue-600 hover:text-blue-800 underline"
+                                >
+                                  {session.companion?.fullName || 'Acompañante'}
+                                </Link>
                               </h3>
                               <StatusBadge status={session.status} />
                             </div>
@@ -734,6 +799,30 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Emergency Modal Controls */}
+      {readyModalOpen && (
+        <div className="fixed top-4 right-4 z-50 bg-red-600 text-white p-3 rounded-lg shadow-lg">
+          <div className="text-sm font-medium mb-2">Modal de Sesión Abierto</div>
+          <div className="space-y-2">
+            <button
+              onClick={forceCloseModal}
+              className="w-full bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-xs"
+            >
+              Cerrar Modal (Emergencia)
+            </button>
+            <button
+              onClick={toggleModalDisabled}
+              className={`w-full px-3 py-1 rounded text-xs ${modalDisabled
+                ? 'bg-green-600 hover:bg-green-700'
+                : 'bg-yellow-600 hover:bg-yellow-700'
+                } text-white`}
+            >
+              {modalDisabled ? 'Habilitar Modal' : 'Deshabilitar Modal'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Session Ready Modal */}
       {currentSession && (

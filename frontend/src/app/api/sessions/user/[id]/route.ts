@@ -4,15 +4,17 @@ const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        console.log('=== FETCHING USER SESSIONS ===');
-        console.log('User ID:', params.id);
+        const { id: userId } = await params;
 
-        // Usar la ruta estándar de Strapi con filtros
+        console.log('=== FETCHING USER SESSIONS ===');
+        console.log('User ID:', userId);
+
+        // Usar la ruta estándar de Strapi con filtros y ordenamiento por createdAt descendente
         const response = await fetch(
-            `${STRAPI_URL}/api/sessions?filters%5Buser%5D%5Bid%5D=${params.id}&populate=companion`,
+            `${STRAPI_URL}/api/sessions?filters%5Buser%5D%5Bid%5D=${userId}&populate=companion&sort=createdAt:desc`,
             {
                 method: 'GET',
                 headers: {

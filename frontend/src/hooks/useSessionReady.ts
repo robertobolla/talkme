@@ -31,41 +31,48 @@ export function useSessionReady({ sessions, userRole, userId }: UseSessionReadyP
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [userReady, setUserReady] = useState(false);
   const [otherPartyReady, setOtherPartyReady] = useState(false);
+  const [modalDisabled, setModalDisabled] = useState(false);
 
-  // Encontrar sesiones que están por comenzar (24 horas antes para testing)
+  // Encontrar sesiones que están por comenzar (5 minutos antes para producción)
   const getUpcomingSessions = useCallback(() => {
     const now = new Date();
-    const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
 
     console.log('=== CHECKING UPCOMING SESSIONS ===');
     console.log('Current time:', now.toISOString());
-    console.log('Twenty four hours from now:', twentyFourHoursFromNow.toISOString());
+    console.log('Five minutes from now:', fiveMinutesFromNow.toISOString());
     console.log('Total sessions:', sessions.length);
+    console.log('Modal disabled:', modalDisabled);
 
     const upcomingSessions = sessions.filter(session => {
       const sessionTime = new Date(session.startTime);
       const isConfirmed = session.status === 'confirmed';
-      const isWithinTwentyFourHours = sessionTime <= twentyFourHoursFromNow && sessionTime > now;
+      const isWithinFiveMinutes = sessionTime <= fiveMinutesFromNow && sessionTime > now;
 
       console.log(`Session ${session.id}:`, {
         startTime: session.startTime,
         sessionTime: sessionTime.toISOString(),
         status: session.status,
         isConfirmed,
-        isWithinTwentyFourHours,
+        isWithinFiveMinutes,
         timeUntilSession: sessionTime.getTime() - now.getTime(),
         timeUntilSessionMinutes: Math.floor((sessionTime.getTime() - now.getTime()) / (1000 * 60))
       });
 
-      return isConfirmed && isWithinTwentyFourHours;
+      return isConfirmed && isWithinFiveMinutes;
     });
 
     console.log('Upcoming sessions found:', upcomingSessions.length);
     return upcomingSessions;
-  }, [sessions]);
+  }, [sessions, modalDisabled]);
 
   // Verificar si es hora de mostrar el modal
   useEffect(() => {
+    if (modalDisabled) {
+      console.log('Modal is disabled, skipping check');
+      return;
+    }
+
     const upcomingSessions = getUpcomingSessions();
 
     console.log('=== CHECKING MODAL TRIGGER ===');
@@ -81,7 +88,7 @@ export function useSessionReady({ sessions, userRole, userId }: UseSessionReadyP
       setUserReady(false);
       setOtherPartyReady(false);
     }
-  }, [sessions, readyModalOpen, videoChatOpen, getUpcomingSessions]);
+  }, [sessions, readyModalOpen, videoChatOpen, getUpcomingSessions, modalDisabled]);
 
   // Verificar estado de la otra parte cuando el usuario está listo
   useEffect(() => {
@@ -161,12 +168,15 @@ export function useSessionReady({ sessions, userRole, userId }: UseSessionReadyP
     setReadyModalOpen(false);
     setUserReady(false);
     setOtherPartyReady(false);
+    setCurrentSession(null);
   }, [currentSession, userId, userRole]);
 
   const handleCloseReadyModal = useCallback(() => {
+    console.log('Closing ready modal');
     setReadyModalOpen(false);
     setUserReady(false);
     setOtherPartyReady(false);
+    setCurrentSession(null);
   }, []);
 
   const handleCloseVideoChat = useCallback(() => {
@@ -185,16 +195,34 @@ export function useSessionReady({ sessions, userRole, userId }: UseSessionReadyP
     setOtherPartyReady(false);
   }, []);
 
+  // Función para forzar el cierre del modal
+  const forceCloseModal = useCallback(() => {
+    console.log('Force closing modal');
+    setReadyModalOpen(false);
+    setUserReady(false);
+    setOtherPartyReady(false);
+    setCurrentSession(null);
+  }, []);
+
+  // Función para deshabilitar/habilitar el modal
+  const toggleModalDisabled = useCallback(() => {
+    setModalDisabled(prev => !prev);
+    console.log('Modal disabled:', !modalDisabled);
+  }, [modalDisabled]);
+
   return {
     readyModalOpen,
     videoChatOpen,
     currentSession,
     userReady,
     otherPartyReady,
+    modalDisabled,
     handleReady,
     handleNotReady,
     handleCloseReadyModal,
     handleCloseVideoChat,
-    forceOpenModal
+    forceOpenModal,
+    forceCloseModal,
+    toggleModalDisabled
   };
 } 

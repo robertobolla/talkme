@@ -4,12 +4,12 @@ const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const companionId = params.id;
+    const { id: companionId } = await params;
 
-    const response = await fetch(`${STRAPI_URL}/api/sessions?filters[companion][$eq]=${companionId}&populate=user&sort=startTime:desc`, {
+    const response = await fetch(`${STRAPI_URL}/api/sessions?filters[companion][$eq]=${companionId}&populate=user&sort=createdAt:desc`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

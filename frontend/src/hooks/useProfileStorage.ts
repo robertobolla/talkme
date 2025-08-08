@@ -12,6 +12,10 @@ interface ProfileData {
   hourlyRate: number;
   skills: string[];
   workZones: string[];
+  timezone: string;
+  interests: string[];
+  languages: string[];
+  profilePhoto?: File | null;
   emergencyContact?: {
     name: string;
     phone: string;
@@ -100,7 +104,7 @@ export function useProfileStorage() {
 
       // Mapear roles del frontend a los del backend
       const backendRole = profileData.role === 'client' ? 'user' : 'companion';
-      
+
       // Intentar guardar en el servidor
       const response = await fetch('/api/onboarding/update-profile', {
         method: 'POST',

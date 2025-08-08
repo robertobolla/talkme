@@ -47,7 +47,11 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   // Hooks para el paso de schedule
   const [availability, setAvailability] = useState<any[]>([]);
   const [loadingAvailability, setLoadingAvailability] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    // Crear la fecha usando el constructor que maneja mejor las zonas horarias
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  });
   const [loadingDateChange, setLoadingDateChange] = useState(false);
 
   // Estado para el modal de selección de duración
@@ -110,7 +114,16 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   // Función para obtener disponibilidad real (excluyendo sesiones confirmadas)
   const fetchRealAvailability = async (companionId: number, date: Date) => {
     try {
-      const dateString = date.toISOString().split('T')[0];
+      // Crear la fecha en la zona horaria local para evitar problemas de UTC
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
+
+      console.log('=== DEBUG fetchRealAvailability ===');
+      console.log('Fecha original:', date);
+      console.log('Fecha formateada:', dateString);
+
       const response = await fetch(`/api/sessions/companion/${companionId}/real-availability?date=${dateString}`);
 
       if (response.ok) {
@@ -152,7 +165,13 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       const realAvailability = await fetchRealAvailability(currentStep.selectedCompanion.id, date);
 
       console.log('=== DEBUG getAvailableSlots ===');
-      console.log('Fecha a buscar:', date.toISOString().split('T')[0]);
+      // Crear la fecha en la zona horaria local para evitar problemas de UTC
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
+
+      console.log('Fecha a buscar:', dateString);
       console.log('Día de la semana:', date.getDay());
       console.log('Disponibilidad real recibida:', realAvailability);
 
@@ -329,7 +348,17 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
   // Función para verificar si un día tiene disponibilidad
   const hasAvailability = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
+    // Crear la fecha en la zona horaria local para evitar problemas de UTC
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+
+    console.log('=== DEBUG hasAvailability ===');
+    console.log('Fecha original:', date);
+    console.log('Fecha formateada:', dateString);
+    console.log('Disponibilidad:', availabilityByDate[dateString]);
+
     return availabilityByDate[dateString] || false;
   };
 
@@ -342,16 +371,37 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     const endDate = new Date(year, month + 1, 0);
     const newAvailabilityByDate: { [key: string]: boolean } = {};
 
+    console.log('=== DEBUG loadAvailabilityForMonth ===');
+    console.log('Year:', year, 'Month:', month);
+    console.log('Start date:', startDate);
+    console.log('End date:', endDate);
+
     // Verificar disponibilidad para cada día del mes
     for (let day = 1; day <= endDate.getDate(); day++) {
       const date = new Date(year, month, day);
       if (date >= new Date()) { // Solo fechas futuras
         try {
           const realAvailability = await fetchRealAvailability(currentStep.selectedCompanion.id, date);
-          newAvailabilityByDate[date.toISOString().split('T')[0]] = realAvailability.length > 0;
+
+          // Crear la fecha en la zona horaria local para evitar problemas de UTC
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const dateString = `${year}-${month}-${day}`;
+
+          newAvailabilityByDate[dateString] = realAvailability.length > 0;
+
+          console.log(`Día ${day}: ${dateString} - Disponibilidad: ${realAvailability.length > 0}`);
         } catch (error) {
           console.error('Error checking availability for date:', date, error);
-          newAvailabilityByDate[date.toISOString().split('T')[0]] = false;
+
+          // Crear la fecha en la zona horaria local para evitar problemas de UTC
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const dateString = `${year}-${month}-${day}`;
+
+          newAvailabilityByDate[dateString] = false;
         }
       }
     }
@@ -375,10 +425,20 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     const currentMonth = selectedDate.getMonth();
     const currentYear = selectedDate.getFullYear();
 
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    console.log('=== DEBUG generateCalendar ===');
+    console.log('Current month:', currentMonth);
+    console.log('Current year:', currentYear);
+    console.log('Selected date:', selectedDate);
+
+    // Crear fechas usando el constructor que maneja mejor las zonas horarias
+    const firstDay = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
+    const lastDay = new Date(currentYear, currentMonth + 1, 0, 0, 0, 0, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
+
+    console.log('First day of month:', firstDay);
+    console.log('Last day of month:', lastDay);
+    console.log('Start date for calendar:', startDate);
 
     const calendar = [];
     const currentDate = new Date(startDate);
@@ -386,12 +446,18 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     for (let week = 0; week < 6; week++) {
       const weekDays = [];
       for (let day = 0; day < 7; day++) {
-        const date = new Date(currentDate);
+        // Crear la fecha usando el constructor que maneja mejor las zonas horarias
+        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0, 0);
         const isCurrentMonth = date.getMonth() === currentMonth;
         const isToday = date.toDateString() === today.toDateString();
         const isSelected = date.toDateString() === selectedDate.toDateString();
         const isAvailable = hasAvailability(date);
         const isPast = date < today;
+
+        // Log solo para fechas del mes actual
+        if (isCurrentMonth) {
+          console.log(`Fecha generada: ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()} - isSelected: ${isSelected}`);
+        }
 
         weekDays.push({
           date,
@@ -412,8 +478,22 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
   // Función para manejar el clic en una fecha del calendario
   const handleDateClick = (date: Date) => {
+    console.log('=== DEBUG handleDateClick ===');
+    console.log('Fecha clickeada (original):', date);
+    console.log('Fecha clickeada (toDateString):', date.toDateString());
+    console.log('Fecha clickeada (toISOString):', date.toISOString());
+    console.log('Fecha clickeada (getDate):', date.getDate());
+    console.log('Fecha clickeada (getMonth):', date.getMonth());
+    console.log('Fecha clickeada (getFullYear):', date.getFullYear());
+
     if (date >= new Date()) {
-      setSelectedDate(date);
+      console.log('Fecha válida, estableciendo selectedDate...');
+      // Crear la fecha usando el constructor que maneja mejor las zonas horarias
+      const newSelectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      console.log('Nueva fecha seleccionada:', newSelectedDate);
+      setSelectedDate(newSelectedDate);
+    } else {
+      console.log('Fecha en el pasado, ignorando...');
     }
   };
 
@@ -490,9 +570,18 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     setLoading(true);
 
     try {
+      // Crear la fecha en la zona horaria local para evitar problemas de UTC
       const startTime = new Date(currentStep.selectedDate);
       const [hours, minutes] = currentStep.selectedTime.split(':');
+
+      // Establecer la hora en la zona horaria local
       startTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+      console.log('=== DEBUG handleConfirmBooking ===');
+      console.log('Fecha seleccionada:', currentStep.selectedDate);
+      console.log('Hora seleccionada:', currentStep.selectedTime);
+      console.log('Fecha final con hora:', startTime);
+      console.log('ISO String:', startTime.toISOString());
 
       const sessionData = {
         user: userProfile.id,
@@ -679,10 +768,10 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
             <div className="border border-gray-200 rounded-lg p-4">
               <input
                 type="date"
-                value={selectedDate.toISOString().split('T')[0]}
+                value={`${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`}
                 onChange={(e) => setSelectedDate(new Date(e.target.value))}
                 className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                min={new Date().toISOString().split('T')[0]}
+                min={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`}
               />
             </div>
           </div>

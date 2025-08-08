@@ -134,6 +134,15 @@
       "type": "json",
       "required": false
     },
+    "timezone": {
+      "type": "string",
+      "required": false,
+      "maxLength": 50
+    },
+    "interests": {
+      "type": "json",
+      "required": false
+    },
     "isOnline": {
       "type": "boolean",
       "required": false,

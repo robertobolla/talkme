@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const sessionId = params.id;
-    
+    const { id: sessionId } = await params;
+
     // Aquí deberías hacer la llamada a tu backend para obtener los datos de la sesión
     // Por ahora, devolvemos datos de ejemplo
     const session = {

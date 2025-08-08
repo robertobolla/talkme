@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
+
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -10,7 +12,6 @@ export async function GET(
         console.log('=== GET COMPANION AVAILABILITY ===');
         console.log('Companion ID:', id);
 
-        const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
         const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
         if (!STRAPI_API_TOKEN) {
@@ -43,10 +44,10 @@ export async function GET(
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const companionId = params.id;
+        const { id: companionId } = await params;
         const body = await request.json();
 
         console.log('Creating availability slot with data:', {
