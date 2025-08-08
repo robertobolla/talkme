@@ -21,7 +21,6 @@ import {
 import StatsCard from '@/components/StatsCard';
 import StatusBadge from '@/components/StatusBadge';
 import SessionBooking from '@/components/SessionBooking';
-import CompanionNotifications from '@/components/CompanionNotifications';
 import CompanionAgenda from '@/components/CompanionAgenda';
 import SessionCountdown from '@/components/SessionCountdown';
 import SessionReadyModal from '@/components/SessionReadyModal';
@@ -745,16 +744,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Notifications for Companions */}
-            {userProfile.role === 'companion' && (
-              <CompanionNotifications
-                companionId={userProfile.id}
-                onSessionConfirmed={() => {
-                  fetchSessions();
-                  showSuccess('Sesión confirmada exitosamente');
-                }}
-              />
-            )}
+            {/* Eliminado: Notificaciones duplicadas para acompañantes (sección lateral derecha) */}
 
             {/* Available Companions (for users) */}
             {userProfile.role === 'user' && companions.length > 0 && (
