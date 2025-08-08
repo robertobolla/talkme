@@ -35,7 +35,8 @@ export async function GET(
 
     if (!availabilityResponse.ok) {
       console.error('Error obteniendo slots de disponibilidad:', availabilityResponse.status);
-      return NextResponse.json({ error: 'Error al obtener slots de disponibilidad' }, { status: availabilityResponse.status });
+      // Devolver éxito con listas vacías para evitar 404/errores en el cliente
+      return NextResponse.json({ availability: [], confirmedSessions: [] }, { status: 200 });
     }
 
     const availabilityData = await availabilityResponse.json();
@@ -58,7 +59,8 @@ export async function GET(
 
     if (!sessionsResponse.ok) {
       console.error('Error obteniendo sesiones:', sessionsResponse.status);
-      return NextResponse.json({ error: 'Error al obtener sesiones' }, { status: sessionsResponse.status });
+      // Devolver éxito con listas vacías para evitar 404/errores en el cliente
+      return NextResponse.json({ availability: [], confirmedSessions: [] }, { status: 200 });
     }
 
     const sessionsData = await sessionsResponse.json();
@@ -129,8 +131,9 @@ export async function GET(
       availability: availableSlots,
       confirmedSessions: confirmedSessions
     });
-  } catch (error) {
-    console.error('Error en real-availability API:', error);
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+  } catch (err) {
+    console.error('Fallo en real-availability:', err);
+    // Devolver éxito con listas vacías para evitar romper el cliente
+    return NextResponse.json({ availability: [], confirmedSessions: [] }, { status: 200 });
   }
 } 

@@ -132,11 +132,16 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
         console.log('Datos de disponibilidad real:', data);
         return data.availability || [];
       } else {
-        console.error('Error obteniendo disponibilidad real:', response.status);
+        // Tratar 400/404 como “sin disponibilidad” sin ruido en consola
+        if (response.status === 400 || response.status === 404) {
+          return [];
+        }
+        // Para otros códigos, registrar advertencia y continuar
+        console.warn('Advertencia obteniendo disponibilidad real. status=', response.status);
         return [];
       }
     } catch (error) {
-      console.error('Error fetching real availability:', error);
+      console.warn('Error fetching real availability (silenciado):', error);
       return [];
     }
   };
