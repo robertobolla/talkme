@@ -120,7 +120,12 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
   // Función para filtrar sesiones según el estado seleccionado
   const getFilteredSessions = () => {
     if (sessionFilter === 'all') {
-      return sessions;
+      // Ocultar pendientes en el listado normal para evitar duplicación con la caja de "Solicitudes Pendientes"
+      return sessions.filter(session => session.status !== 'pending');
+    }
+    if (sessionFilter === 'pending') {
+      // No mostrar cards para pendientes; se gestionan en la caja superior
+      return [];
     }
     return sessions.filter(session => session.status === sessionFilter);
   };
