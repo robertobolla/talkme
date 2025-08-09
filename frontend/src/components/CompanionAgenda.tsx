@@ -117,6 +117,15 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
     return time.split(':').slice(0, 2).join(':');
   };
 
+  // Parseo seguro de fecha en formato YYYY-MM-DD como fecha local (evita problemas de UTC)
+  const parseLocalDate = (dateString: string) => {
+    const [yearStr, monthStr, dayStr] = dateString.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr) - 1; // 0-based
+    const day = Number(dayStr);
+    return new Date(year, month, day, 0, 0, 0, 0);
+  };
+
   // Función para filtrar sesiones según el estado seleccionado
   const getFilteredSessions = () => {
     if (sessionFilter === 'all') {
@@ -193,10 +202,10 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
       // Obtener disponibilidad para este día
       const dayAvailability = availability.filter(slot => {
         if (slot.startDate && slot.endDate) {
-          // Si tiene fechas específicas
-          const slotStart = new Date(slot.startDate);
-          const slotEnd = new Date(slot.endDate);
-          return currentDay >= slotStart && currentDay <= slotEnd;
+          // Si tiene fechas específicas, comparar como fechas locales e incluir estado activo
+          const slotStart = parseLocalDate(slot.startDate);
+          const slotEnd = parseLocalDate(slot.endDate);
+          return slot.isActive && currentDay >= slotStart && currentDay <= slotEnd;
         } else {
           // Si usa día de la semana
           return slot.dayOfWeek === currentDay.getDay() && slot.isActive;
