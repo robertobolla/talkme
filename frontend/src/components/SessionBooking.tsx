@@ -124,7 +124,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       console.log('Fecha original:', date);
       console.log('Fecha formateada:', dateString);
 
-      const response = await fetch(`/api/sessions/companion/${companionId}/real-availability?date=${dateString}`);
+      const response = await fetch(`/api/sessions/companion/${companionId}/real-availability?date=${dateString}`, { cache: 'no-store' as any });
 
       if (response.ok) {
         const data = await response.json();

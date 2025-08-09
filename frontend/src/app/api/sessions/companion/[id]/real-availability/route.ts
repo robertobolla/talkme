@@ -25,6 +25,12 @@ export async function GET(
       return NextResponse.json({ error: 'Error de configuración' }, { status: 500 });
     }
 
+    // Helper: parsear YYYY-MM-DD como fecha local (evita desfasajes por UTC)
+    const parseLocalDate = (dateString: string) => {
+      const [y, m, d] = dateString.split('-').map(Number);
+      return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+    };
+
     // Obtener los slots de disponibilidad del acompañante
     const availabilityResponse = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][id][$eq]=${id}&sort=dayOfWeek:asc,startTime:asc`, {
       headers: {
@@ -55,9 +61,10 @@ export async function GET(
     console.log('Slots de disponibilidad (normalizados):', availabilitySlots);
 
     // Obtener sesiones confirmadas para la fecha
-    const startOfDay = new Date(date);
+    const searchLocalDate = parseLocalDate(date);
+    const startOfDay = new Date(searchLocalDate);
     startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
+    const endOfDay = new Date(searchLocalDate);
     endOfDay.setHours(23, 59, 59, 999);
 
     const sessionsResponse = await fetch(`${STRAPI_URL}/api/sessions?filters[companion][id][$eq]=${id}&filters[status][$in][0]=confirmed&filters[status][$in][1]=in_progress&filters[startTime][$gte]=${startOfDay.toISOString()}&filters[endTime][$lte]=${endOfDay.toISOString()}`, {
@@ -86,8 +93,8 @@ export async function GET(
     console.log('Sesiones confirmadas (normalizadas):', confirmedSessions);
 
     // Filtrar slots disponibles excluyendo sesiones confirmadas
-    const dayOfWeek = new Date(date).getDay();
-    const searchDate = new Date(date);
+    const dayOfWeek = searchLocalDate.getDay();
+    const searchDate = new Date(searchLocalDate);
     searchDate.setHours(0, 0, 0, 0);
 
     const availableSlots = availabilitySlots.filter((slot: any) => {
@@ -102,13 +109,9 @@ export async function GET(
       let isSlotAvailable = false;
 
       if (slot.startDate && slot.endDate) {
-        // Si tiene fechas específicas
-        const slotStart = new Date(slot.startDate);
-        const slotEnd = new Date(slot.endDate);
-
-        // Normalizar las fechas para comparar solo la fecha (sin hora)
-        const slotStartDate = new Date(slotStart.getFullYear(), slotStart.getMonth(), slotStart.getDate());
-        const slotEndDate = new Date(slotEnd.getFullYear(), slotEnd.getMonth(), slotEnd.getDate());
+        // Si tiene fechas específicas (comparar como fechas locales)
+        const slotStartDate = parseLocalDate(slot.startDate);
+        const slotEndDate = parseLocalDate(slot.endDate);
 
         isSlotAvailable = searchDate >= slotStartDate && searchDate <= slotEndDate;
         console.log('Fechas específicas - Inicio:', slot.startDate, 'Fin:', slot.endDate, 'Disponible:', isSlotAvailable);
