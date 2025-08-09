@@ -111,10 +111,13 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  // Función para formatear tiempo (quitar segundos)
-  const formatDisplayTime = (time: string) => {
-    // Si el tiempo viene en formato HH:mm:ss.SSS, solo tomar HH:mm
-    return time.split(':').slice(0, 2).join(':');
+  // Función para formatear tiempo (segura y sin segundos)
+  const formatDisplayTime = (time?: string) => {
+    if (!time || typeof time !== 'string') return '--:--';
+    const parts = time.split(':');
+    if (parts.length < 2) return time;
+    const [hh, mm] = parts;
+    return `${hh}:${mm}`;
   };
 
   // Parseo seguro de fecha en formato YYYY-MM-DD como fecha local (evita problemas de UTC)
