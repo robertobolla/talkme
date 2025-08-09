@@ -40,9 +40,19 @@ export async function GET(
     }
 
     const availabilityData = await availabilityResponse.json();
-    const availabilitySlots = availabilityData.data || [];
+    const availabilitySlots = Array.isArray(availabilityData?.data)
+      ? availabilityData.data.map((item: any) => ({
+          id: item.id,
+          dayOfWeek: item.attributes?.dayOfWeek,
+          startTime: item.attributes?.startTime,
+          endTime: item.attributes?.endTime,
+          startDate: item.attributes?.startDate ?? undefined,
+          endDate: item.attributes?.endDate ?? undefined,
+          isActive: item.attributes?.isActive ?? true,
+        }))
+      : [];
 
-    console.log('Slots de disponibilidad:', availabilitySlots);
+    console.log('Slots de disponibilidad (normalizados):', availabilitySlots);
 
     // Obtener sesiones confirmadas para la fecha
     const startOfDay = new Date(date);
@@ -64,9 +74,16 @@ export async function GET(
     }
 
     const sessionsData = await sessionsResponse.json();
-    const confirmedSessions = sessionsData.data || [];
+    const confirmedSessions = Array.isArray(sessionsData?.data)
+      ? sessionsData.data.map((item: any) => ({
+          id: item.id,
+          startTime: item.attributes?.startTime,
+          endTime: item.attributes?.endTime,
+          status: item.attributes?.status,
+        }))
+      : [];
 
-    console.log('Sesiones confirmadas:', confirmedSessions);
+    console.log('Sesiones confirmadas (normalizadas):', confirmedSessions);
 
     // Filtrar slots disponibles excluyendo sesiones confirmadas
     const dayOfWeek = new Date(date).getDay();

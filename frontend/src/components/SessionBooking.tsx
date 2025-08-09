@@ -90,7 +90,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       const fetchAvailability = async () => {
         try {
           setLoadingAvailability(true);
-          const response = await fetch(`/api/companions/${currentStep.selectedCompanion!.id}/availability`);
+          const response = await fetch(`/api/companions/${currentStep.selectedCompanion!.id}/availability`, { cache: 'no-store' as any });
           if (response.ok) {
             const data = await response.json();
             console.log('=== DATOS DE DISPONIBILIDAD ===');
