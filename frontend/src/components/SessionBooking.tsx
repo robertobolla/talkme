@@ -146,6 +146,12 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     }
   };
 
+  // Helper: parsear YYYY-MM-DD como fecha local (evita desfasajes por UTC)
+  const parseLocalDate = (dateString: string) => {
+    const [y, m, d] = dateString.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+  };
+
   // Actualizar horarios cuando cambia la fecha seleccionada
   useEffect(() => {
     if (currentStep.step === 'schedule' && availability.length > 0) {
@@ -187,7 +193,27 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       });
 
       console.log('Slots válidos:', validSlots);
-      return validSlots;
+
+      if (validSlots.length > 0) {
+        return validSlots;
+      }
+
+      // Fallback: si la API de real-availability no devuelve nada, filtrar con la disponibilidad base
+      const dayOfWeek = date.getDay();
+      const searchDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+
+      const fallbackSlots = availability.filter((slot: any) => {
+        if (!slot?.isActive) return false;
+        if (slot.startDate && slot.endDate) {
+          const slotStart = parseLocalDate(slot.startDate);
+          const slotEnd = parseLocalDate(slot.endDate);
+          return searchDate >= slotStart && searchDate <= slotEnd;
+        }
+        return slot.dayOfWeek === dayOfWeek;
+      });
+
+      console.log('Fallback slots (desde availability base):', fallbackSlots);
+      return fallbackSlots;
     } catch (error) {
       console.error('Error obteniendo slots disponibles:', error);
       return [];
