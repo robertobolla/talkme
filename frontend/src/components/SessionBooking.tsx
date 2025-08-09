@@ -213,7 +213,16 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       });
 
       console.log('Fallback slots (desde availability base):', fallbackSlots);
-      return fallbackSlots;
+
+      // Normalizar estructura de fallback para que incluya startTime/endTime como HH:mm:ss.SSS si vinieran como HH:mm
+      const normalizeTime = (t: string) => (t && t.length === 5 ? `${t}:00.000` : t);
+      const normalizedFallback = fallbackSlots.map((slot: any) => ({
+        ...slot,
+        startTime: normalizeTime(slot.startTime),
+        endTime: normalizeTime(slot.endTime),
+      }));
+
+      return normalizedFallback;
     } catch (error) {
       console.error('Error obteniendo slots disponibles:', error);
       return [];
@@ -800,7 +809,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
               <input
                 type="date"
                 value={`${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`}
-                onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                onChange={(e) => setSelectedDate(parseLocalDate(e.target.value))}
                 className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 min={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`}
               />
