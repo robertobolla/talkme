@@ -20,7 +20,8 @@ export async function GET(
         }
 
         // Obtener los slots de disponibilidad del acompañante
-        const response = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][$eq]=${id}&sort=dayOfWeek:asc,startTime:asc`, {
+        // Filtrar por relación usando el id del acompañante
+        const response = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][id][$eq]=${id}&sort=dayOfWeek:asc,startTime:asc`, {
             headers: {
                 'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
                 'Content-Type': 'application/json',
@@ -35,7 +36,20 @@ export async function GET(
         const data = await response.json();
         console.log('Disponibilidad obtenida:', data);
 
-        return NextResponse.json(data.data || []);
+        // Normalizar la respuesta para devolver un arreglo plano con los atributos esperados por el cliente
+        const normalized = Array.isArray(data?.data)
+            ? data.data.map((item: any) => ({
+                id: item.id,
+                dayOfWeek: item.attributes?.dayOfWeek,
+                startTime: item.attributes?.startTime,
+                endTime: item.attributes?.endTime,
+                startDate: item.attributes?.startDate ?? undefined,
+                endDate: item.attributes?.endDate ?? undefined,
+                isActive: item.attributes?.isActive ?? true,
+            }))
+            : [];
+
+        return NextResponse.json(normalized);
     } catch (error) {
         console.error('Error en availability API:', error);
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
@@ -55,10 +69,13 @@ export async function POST(
             companion: companionId
         });
 
+        const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
+
         const response = await fetch(`${STRAPI_URL}/api/availability-slots`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(STRAPI_API_TOKEN ? { 'Authorization': `Bearer ${STRAPI_API_TOKEN}` } : {}),
             },
             body: JSON.stringify({
                 data: {

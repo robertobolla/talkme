@@ -402,7 +402,7 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
 
   const fetchAvailability = async () => {
     try {
-      const response = await fetch(`/api/companions/${companionId}/availability`);
+      const response = await fetch(`/api/companions/${companionId}/availability`, { cache: 'no-store' as any });
       if (response.ok) {
         const data = await response.json();
         setAvailability(data);
