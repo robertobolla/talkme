@@ -47,15 +47,23 @@ export async function GET(
 
     const availabilityData = await availabilityResponse.json();
     const availabilitySlots = Array.isArray(availabilityData?.data)
-      ? availabilityData.data.map((item: any) => ({
+      ? availabilityData.data.map((item: any) => {
+        const attrs = item.attributes || {};
+        let startDate = attrs.startDate ?? attrs.start_date ?? attrs.start ?? item.startDate ?? item.start_date ?? item.start ?? undefined;
+        let endDate = attrs.endDate ?? attrs.end_date ?? attrs.end ?? item.endDate ?? item.end_date ?? item.end ?? undefined;
+        // Si hay una sola fecha, úsala como inicio y fin
+        if (startDate && !endDate) endDate = startDate;
+        if (!startDate && endDate) startDate = endDate;
+        return {
           id: item.id,
-          dayOfWeek: item.attributes?.dayOfWeek,
-          startTime: item.attributes?.startTime,
-          endTime: item.attributes?.endTime,
-          startDate: item.attributes?.startDate ?? undefined,
-          endDate: item.attributes?.endDate ?? undefined,
-          isActive: item.attributes?.isActive ?? true,
-        }))
+          dayOfWeek: attrs.dayOfWeek ?? attrs.day_of_week ?? attrs.dow ?? item.dayOfWeek ?? item.day_of_week ?? item.dow ?? 0,
+          startTime: attrs.startTime ?? attrs.start_time ?? attrs.start ?? item.startTime ?? item.start_time ?? item.start ?? undefined,
+          endTime: attrs.endTime ?? attrs.end_time ?? attrs.end ?? item.endTime ?? item.end_time ?? item.end ?? undefined,
+          startDate,
+          endDate,
+          isActive: attrs.isActive ?? attrs.is_active ?? attrs.active ?? item.isActive ?? item.is_active ?? true,
+        };
+      })
       : [];
 
     console.log('Slots de disponibilidad (normalizados):', availabilitySlots);
@@ -81,75 +89,119 @@ export async function GET(
     }
 
     const sessionsData = await sessionsResponse.json();
+    console.log('Sesiones confirmadas (raw):', JSON.stringify(sessionsData));
     const confirmedSessions = Array.isArray(sessionsData?.data)
-      ? sessionsData.data.map((item: any) => ({
+      ? sessionsData.data.map((item: any) => {
+        const attrs = item.attributes || {};
+        return {
           id: item.id,
-          startTime: item.attributes?.startTime,
-          endTime: item.attributes?.endTime,
-          status: item.attributes?.status,
-        }))
+          startTime: attrs.startTime ?? attrs.start_time ?? attrs.start ?? item.startTime ?? item.start_time ?? item.start ?? undefined,
+          endTime: attrs.endTime ?? attrs.end_time ?? attrs.end ?? item.endTime ?? item.end_time ?? item.end ?? undefined,
+          status: attrs.status ?? item.status,
+        };
+      })
       : [];
 
     console.log('Sesiones confirmadas (normalizadas):', confirmedSessions);
 
-    // Filtrar slots disponibles excluyendo sesiones confirmadas
+    // Helpers para trabajar con minutos del día
+    const toMinutes = (timeStr: string): number => {
+      // Soporta HH:mm, HH:mm:ss, HH:mm:ss.SSS
+      const parts = timeStr.split(':');
+      const hh = parseInt(parts[0] || '0', 10);
+      const mm = parseInt(parts[1] || '0', 10);
+      return hh * 60 + mm;
+    };
+
+    const minutesToTime = (mins: number): string => {
+      const clamped = Math.max(0, Math.min(24 * 60, Math.round(mins)));
+      const hh = String(Math.floor(clamped / 60)).padStart(2, '0');
+      const mm = String(clamped % 60).padStart(2, '0');
+      return `${hh}:${mm}:00.000`;
+    };
+
+    // Convertir sesiones confirmadas a intervalos [startMin, endMin]
+    const busyIntervals: Array<{ start: number; end: number }> = confirmedSessions
+      .map((s: any) => {
+        if (!s?.startTime || !s?.endTime) return null;
+        const sStart = new Date(s.startTime);
+        const sEnd = new Date(s.endTime);
+        const start = sStart.getHours() * 60 + sStart.getMinutes();
+        const end = sEnd.getHours() * 60 + sEnd.getMinutes();
+        return { start, end };
+      })
+      .filter(Boolean) as Array<{ start: number; end: number }>;
+
+    // Normalizar y ordenar intervalos ocupados
+    busyIntervals.sort((a, b) => a.start - b.start);
+
     const dayOfWeek = searchLocalDate.getDay();
     const searchDate = new Date(searchLocalDate);
     searchDate.setHours(0, 0, 0, 0);
 
-    const availableSlots = availabilitySlots.filter((slot: any) => {
-      console.log('Analizando slot:', slot);
+    // Para cada slot aplicable, devolver segmentos libres después de restar sesiones ocupadas
+    const freeSegments: Array<{ startTime: string; endTime: string; isActive: boolean; slotId: number }> = [];
 
-      // Verificar si el slot está activo
-      if (!slot.isActive) {
-        console.log('Slot no está activo');
-        return false;
-      }
+    for (const slot of availabilitySlots) {
+      if (!slot?.isActive) continue;
 
-      let isSlotAvailable = false;
-
+      let applies = false;
       if (slot.startDate && slot.endDate) {
-        // Si tiene fechas específicas (comparar como fechas locales)
         const slotStartDate = parseLocalDate(slot.startDate);
         const slotEndDate = parseLocalDate(slot.endDate);
-
-        isSlotAvailable = searchDate >= slotStartDate && searchDate <= slotEndDate;
-        console.log('Fechas específicas - Inicio:', slot.startDate, 'Fin:', slot.endDate, 'Disponible:', isSlotAvailable);
+        applies = searchDate >= slotStartDate && searchDate <= slotEndDate;
       } else {
-        // Si usa día de la semana
-        isSlotAvailable = slot.dayOfWeek === dayOfWeek;
-        console.log('Día de semana - Día del slot:', slot.dayOfWeek, 'Día buscado:', dayOfWeek, 'Disponible:', isSlotAvailable);
+        applies = slot.dayOfWeek === dayOfWeek;
+      }
+      if (!applies) continue;
+
+      if (!slot.startTime || !slot.endTime) continue;
+
+      let segments: Array<{ start: number; end: number }> = [{
+        start: toMinutes(slot.startTime),
+        end: toMinutes(slot.endTime)
+      }];
+
+      // Restar cada intervalo ocupado de las sesiones confirmadas
+      for (const busy of busyIntervals) {
+        const nextSegments: Array<{ start: number; end: number }> = [];
+        for (const seg of segments) {
+          const overlapStart = Math.max(seg.start, busy.start);
+          const overlapEnd = Math.min(seg.end, busy.end);
+          const overlaps = overlapStart < overlapEnd;
+          if (!overlaps) {
+            nextSegments.push(seg);
+          } else {
+            // Parte izquierda libre
+            if (seg.start < overlapStart) {
+              nextSegments.push({ start: seg.start, end: overlapStart });
+            }
+            // Parte derecha libre
+            if (overlapEnd < seg.end) {
+              nextSegments.push({ start: overlapEnd, end: seg.end });
+            }
+          }
+        }
+        segments = nextSegments;
+        if (segments.length === 0) break;
       }
 
-      if (!isSlotAvailable) {
-        return false;
+      // Convertir segmentos a objetos con horas
+      for (const seg of segments) {
+        if (seg.end - seg.start >= 5) { // al menos 5 minutos
+          freeSegments.push({
+            startTime: minutesToTime(seg.start),
+            endTime: minutesToTime(seg.end),
+            isActive: true,
+            slotId: slot.id,
+          });
+        }
       }
-
-      // Verificar si hay sesiones confirmadas que se superponen con este slot
-      const slotStart = new Date(`2000-01-01T${slot.startTime}`);
-      const slotEnd = new Date(`2000-01-01T${slot.endTime}`);
-
-      const hasConflict = confirmedSessions.some((session: any) => {
-        const sessionStart = new Date(session.startTime);
-        const sessionEnd = new Date(session.endTime);
-
-        // Convertir a tiempo del día para comparar
-        const sessionStartTime = new Date(`2000-01-01T${sessionStart.toTimeString().slice(0, 8)}`);
-        const sessionEndTime = new Date(`2000-01-01T${sessionEnd.toTimeString().slice(0, 8)}`);
-
-        // Verificar si hay superposición
-        return sessionStartTime < slotEnd && sessionEndTime > slotStart;
-      });
-
-      console.log('Slot tiene conflicto:', hasConflict);
-      return !hasConflict;
-    });
-
-    console.log('Slots disponibles filtrados:', availableSlots);
+    }
 
     return NextResponse.json({
-      availability: availableSlots,
-      confirmedSessions: confirmedSessions
+      availability: freeSegments,
+      confirmedSessions: confirmedSessions,
     });
   } catch (err) {
     console.error('Fallo en real-availability:', err);

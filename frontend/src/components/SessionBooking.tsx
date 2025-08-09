@@ -204,12 +204,16 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
       const fallbackSlots = availability.filter((slot: any) => {
         if (!slot?.isActive) return false;
-        if (slot.startDate && slot.endDate) {
-          const slotStart = parseLocalDate(slot.startDate);
-          const slotEnd = parseLocalDate(slot.endDate);
+        // Aceptar variantes de nombre en los campos
+        const sDate = slot.startDate ?? slot.start_date ?? slot.start;
+        const eDate = slot.endDate ?? slot.end_date ?? slot.end;
+        if (sDate && eDate) {
+          const slotStart = parseLocalDate(sDate);
+          const slotEnd = parseLocalDate(eDate);
           return searchDate >= slotStart && searchDate <= slotEnd;
         }
-        return slot.dayOfWeek === dayOfWeek;
+        const dow = slot.dayOfWeek ?? slot.day_of_week ?? slot.dow;
+        return dow === dayOfWeek;
       });
 
       console.log('Fallback slots (desde availability base):', fallbackSlots);
@@ -233,41 +237,49 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   const [availableSlots, setAvailableSlots] = useState<any[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
-  // Función para combinar slots contiguos
+  // Función para combinar slots contiguos o solapados y normalizar
   const combineContiguousSlots = (slots: any[]) => {
     if (slots.length === 0) return [];
 
-    // Ordenar slots por hora de inicio
-    const sortedSlots = [...slots].sort((a, b) => {
-      const timeA = new Date(`2000-01-01T${a.startTime}`);
-      const timeB = new Date(`2000-01-01T${b.startTime}`);
-      return timeA.getTime() - timeB.getTime();
-    });
+    const toMinutes = (timeStr: string): number => {
+      const [h, m] = (timeStr || '').split(':');
+      const hh = parseInt(h || '0', 10);
+      const mm = parseInt(m || '0', 10);
+      return hh * 60 + mm;
+    };
 
-    const combinedSlots = [];
-    let currentSlot = { ...sortedSlots[0] };
+    const minutesToTime = (mins: number): string => {
+      const clamped = Math.max(0, Math.min(24 * 60, Math.round(mins)));
+      const hh = String(Math.floor(clamped / 60)).padStart(2, '0');
+      const mm = String(clamped % 60).padStart(2, '0');
+      return `${hh}:${mm}:00.000`;
+    };
 
-    for (let i = 1; i < sortedSlots.length; i++) {
-      const nextSlot = sortedSlots[i];
+    // Ordenar por hora de inicio
+    const sorted = [...slots].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
 
-      // Verificar si el slot actual termina cuando el siguiente empieza
-      const currentEnd = new Date(`2000-01-01T${currentSlot.endTime}`);
-      const nextStart = new Date(`2000-01-01T${nextSlot.startTime}`);
-
-      if (currentEnd.getTime() === nextStart.getTime()) {
-        // Son contiguos, combinar
-        currentSlot.endTime = nextSlot.endTime;
+    const merged: Array<{ start: number; end: number }> = [];
+    for (const s of sorted) {
+      const start = toMinutes(s.startTime);
+      const end = toMinutes(s.endTime);
+      if (merged.length === 0) {
+        merged.push({ start, end });
+        continue;
+      }
+      const last = merged[merged.length - 1];
+      if (start <= last.end) {
+        // Solapa o es contiguo: extender el final
+        last.end = Math.max(last.end, end);
       } else {
-        // No son contiguos, guardar el actual y empezar uno nuevo
-        combinedSlots.push(currentSlot);
-        currentSlot = { ...nextSlot };
+        merged.push({ start, end });
       }
     }
 
-    // Agregar el último slot
-    combinedSlots.push(currentSlot);
-
-    return combinedSlots;
+    // Filtrar segmentos muy cortos (menos de 10 min) y devolver normalizados
+    const MIN_SEGMENT_MINUTES = 15;
+    return merged
+      .filter(seg => seg.end - seg.start >= MIN_SEGMENT_MINUTES)
+      .map(seg => ({ startTime: minutesToTime(seg.start), endTime: minutesToTime(seg.end), isActive: true }));
   };
 
   const combinedAvailableSlots = combineContiguousSlots(availableSlots);
@@ -411,6 +423,15 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     const endDate = new Date(year, month + 1, 0);
     const newAvailabilityByDate: { [key: string]: boolean } = {};
 
+    // Normalizar "hoy" a medianoche para incluir el día actual como válido
+    const now = new Date();
+    const normalizedToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0, 0, 0, 0
+    );
+
     console.log('=== DEBUG loadAvailabilityForMonth ===');
     console.log('Year:', year, 'Month:', month);
     console.log('Start date:', startDate);
@@ -419,7 +440,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
     // Verificar disponibilidad para cada día del mes
     for (let day = 1; day <= endDate.getDate(); day++) {
       const date = new Date(year, month, day);
-      if (date >= new Date()) { // Solo fechas futuras
+      if (date >= normalizedToday) { // Incluir también el día actual
         try {
           const realAvailability = await fetchRealAvailability(currentStep.selectedCompanion.id, date);
 
@@ -443,6 +464,13 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
 
           newAvailabilityByDate[dateString] = false;
         }
+      } else {
+        // Días pasados no se consultan; marcarlos como no disponibles
+        const yearStr = date.getFullYear();
+        const monthStr = String(date.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(date.getDate()).padStart(2, '0');
+        const dateString = `${yearStr}-${monthStr}-${dayStr}`;
+        newAvailabilityByDate[dateString] = false;
       }
     }
 
@@ -462,6 +490,12 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
   // Función para generar el calendario
   const generateCalendar = () => {
     const today = new Date();
+    const normalizedToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      0, 0, 0, 0
+    );
     const currentMonth = selectedDate.getMonth();
     const currentYear = selectedDate.getFullYear();
 
@@ -492,7 +526,8 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
         const isToday = date.toDateString() === today.toDateString();
         const isSelected = date.toDateString() === selectedDate.toDateString();
         const isAvailable = hasAvailability(date);
-        const isPast = date < today;
+        // Considerar como pasado solo días estrictamente anteriores a hoy (mismo día permitido)
+        const isPast = date < normalizedToday;
 
         // Log solo para fechas del mes actual
         if (isCurrentMonth) {

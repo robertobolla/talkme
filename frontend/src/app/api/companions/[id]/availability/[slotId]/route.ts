@@ -9,11 +9,13 @@ export async function PUT(
     try {
         const { slotId } = await params;
         const body = await request.json();
+        const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
         const response = await fetch(`${STRAPI_URL}/api/availability-slots/${slotId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
+                ...(STRAPI_API_TOKEN ? { 'Authorization': `Bearer ${STRAPI_API_TOKEN}` } : {}),
             },
             body: JSON.stringify({
                 data: body
@@ -41,11 +43,13 @@ export async function DELETE(
 ) {
     try {
         const { slotId } = await params;
+        const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
         const response = await fetch(`${STRAPI_URL}/api/availability-slots/${slotId}`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
+                ...(STRAPI_API_TOKEN ? { 'Authorization': `Bearer ${STRAPI_API_TOKEN}` } : {}),
             },
         });
 

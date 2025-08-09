@@ -14,17 +14,12 @@ export async function GET(
 
         const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
-        if (!STRAPI_API_TOKEN) {
-            console.error('STRAPI_API_TOKEN no está configurada');
-            return NextResponse.json({ error: 'Error de configuración' }, { status: 500 });
-        }
-
         // Obtener los slots de disponibilidad del acompañante
         // Filtrar por relación usando el id del acompañante
-        const response = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][id][$eq]=${id}&sort=dayOfWeek:asc,startTime:asc`, {
+        const response = await fetch(`${STRAPI_URL}/api/availability-slots?filters[companion][id][$eq]=${id}&fields[0]=dayOfWeek&fields[1]=startTime&fields[2]=endTime&fields[3]=startDate&fields[4]=endDate&fields[5]=isActive&sort=dayOfWeek:asc,startTime:asc&pagination[pageSize]=200`, {
             headers: {
-                'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
                 'Content-Type': 'application/json',
+                ...(STRAPI_API_TOKEN ? { 'Authorization': `Bearer ${STRAPI_API_TOKEN}` } : {}),
             },
         });
 
@@ -34,20 +29,28 @@ export async function GET(
         }
 
         const data = await response.json();
-        console.log('Disponibilidad obtenida:', data);
+        console.log('Disponibilidad obtenida (raw de Strapi):', JSON.stringify(data));
 
         // Normalizar la respuesta para devolver un arreglo plano con los atributos esperados por el cliente
         const normalized = Array.isArray(data?.data)
-            ? data.data.map((item: any) => ({
-                id: item.id,
-                dayOfWeek: item.attributes?.dayOfWeek,
-                startTime: item.attributes?.startTime,
-                endTime: item.attributes?.endTime,
-                startDate: item.attributes?.startDate ?? undefined,
-                endDate: item.attributes?.endDate ?? undefined,
-                isActive: item.attributes?.isActive ?? true,
-            }))
+            ? data.data.map((item: any) => {
+                const attrs = item.attributes || {};
+                return {
+                    id: item.id,
+                    dayOfWeek: attrs.dayOfWeek ?? attrs.day_of_week ?? attrs.dow ?? item.dayOfWeek ?? item.day_of_week ?? item.dow ?? 0,
+                    startTime: attrs.startTime ?? attrs.start_time ?? attrs.start ?? item.startTime ?? item.start_time ?? item.start ?? undefined,
+                    endTime: attrs.endTime ?? attrs.end_time ?? attrs.end ?? item.endTime ?? item.end_time ?? item.end ?? undefined,
+                    startDate: attrs.startDate ?? attrs.start_date ?? item.startDate ?? item.start_date ?? undefined,
+                    endDate: attrs.endDate ?? attrs.end_date ?? item.endDate ?? item.end_date ?? undefined,
+                    isActive: attrs.isActive ?? attrs.is_active ?? item.isActive ?? item.is_active ?? true,
+                };
+            })
             : [];
+
+        console.log('Disponibilidad normalizada (count):', normalized.length);
+        if (normalized.length > 0) {
+            console.log('Primer slot normalizado:', normalized[0]);
+        }
 
         return NextResponse.json(normalized);
     } catch (error) {

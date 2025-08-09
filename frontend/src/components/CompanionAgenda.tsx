@@ -122,11 +122,29 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
 
   // Parseo seguro de fecha en formato YYYY-MM-DD como fecha local (evita problemas de UTC)
   const parseLocalDate = (dateString: string) => {
-    const [yearStr, monthStr, dayStr] = dateString.split('-');
+    if (!dateString) return new Date(NaN);
+    // Soporta 'YYYY-MM-DD' y cadenas ISO tipo 'YYYY-MM-DDTHH:mm:ss.sssZ'
+    const onlyDate = dateString.split('T')[0];
+    const [yearStr, monthStr, dayStr] = onlyDate.split('-');
     const year = Number(yearStr);
     const month = Number(monthStr) - 1; // 0-based
     const day = Number(dayStr);
     return new Date(year, month, day, 0, 0, 0, 0);
+  };
+
+  // Helpers para tolerar distintas claves de los slots (camelCase o snake_case)
+  const getSlotTime = (slot: any, which: 'start' | 'end'): string | undefined => {
+    if (!slot) return undefined;
+    if (which === 'start') {
+      return slot.startTime ?? slot.start_time ?? slot.start ?? undefined;
+    }
+    return slot.endTime ?? slot.end_time ?? slot.end ?? undefined;
+  };
+
+  const getSlotDayOfWeek = (slot: any): number | undefined => {
+    if (!slot) return undefined;
+    const dow = slot.dayOfWeek ?? slot.day_of_week ?? slot.dow;
+    return typeof dow === 'number' ? dow : undefined;
   };
 
   // Función para filtrar sesiones según el estado seleccionado
@@ -204,31 +222,85 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
 
       // Obtener disponibilidad para este día
       const dayAvailability = availability.filter(slot => {
-        if (slot.startDate && slot.endDate) {
-          // Si tiene fechas específicas, comparar como fechas locales e incluir estado activo
-          const slotStart = parseLocalDate(slot.startDate);
-          const slotEnd = parseLocalDate(slot.endDate);
-          return slot.isActive && currentDay >= slotStart && currentDay <= slotEnd;
-        } else {
-          // Si usa día de la semana
-          return slot.dayOfWeek === currentDay.getDay() && slot.isActive;
+        const isActive = slot.isActive ?? slot.is_active ?? true;
+        // Compatibilidad con ambos modelos: por fecha específica o por día de semana
+        const startDate = slot.startDate ?? slot.start_date ?? undefined;
+        const endDate = slot.endDate ?? slot.end_date ?? undefined;
+        if (startDate && endDate) {
+          const slotStart = parseLocalDate(startDate);
+          const slotEnd = parseLocalDate(endDate);
+          return isActive && currentDay >= slotStart && currentDay <= slotEnd;
         }
+        const dow = getSlotDayOfWeek(slot);
+        return isActive && dow === currentDay.getDay();
       });
 
-      // Determinar el estado del día
+      // Determinar el estado del día usando segmentos libres (restando sesiones confirmadas)
       let status: DayStatus = 'no-availability';
-
       if (dayAvailability.length > 0) {
-        const bookedSessions = daySessions.filter(s =>
-          s.status === 'confirmed' || s.status === 'in_progress' || s.status === 'completed'
-        );
+        // Construir intervalos ocupados por sesiones (minutos del día)
+        const busyIntervals: Array<{ start: number; end: number }> = daySessions
+          .filter(s => s.status === 'confirmed' || s.status === 'in_progress' || s.status === 'completed')
+          .map(s => {
+            const sStart = new Date(s.startTime);
+            const sEnd = new Date(s.endTime);
+            return {
+              start: sStart.getHours() * 60 + sStart.getMinutes(),
+              end: sEnd.getHours() * 60 + sEnd.getMinutes(),
+            };
+          })
+          .filter(i => i.end > i.start)
+          .sort((a, b) => a.start - b.start);
 
-        if (bookedSessions.length >= dayAvailability.length) {
-          status = 'full';
-        } else if (bookedSessions.length > 0) {
-          status = 'booked';
+        const toMinutes = (time?: string): number => {
+          if (!time) return NaN;
+          const [h, m] = time.split(':');
+          const hh = parseInt(h || '0', 10);
+          const mm = parseInt(m || '0', 10);
+          return hh * 60 + mm;
+        };
+
+        // Para cada slot disponible (activo), restar ocupados y medir si queda algún segmento >= 15 min
+        const MIN_FREE_MINUTES = 15;
+        let hasFree = false;
+        let hasBooked = busyIntervals.length > 0;
+
+        for (const slot of dayAvailability) {
+          const startStr = getSlotTime(slot, 'start');
+          const endStr = getSlotTime(slot, 'end');
+          const slotStart = toMinutes(startStr);
+          const slotEnd = toMinutes(endStr);
+          if (!isFinite(slotStart) || !isFinite(slotEnd) || slotEnd <= slotStart) continue;
+
+          let segments: Array<{ start: number; end: number }> = [{ start: slotStart, end: slotEnd }];
+
+          for (const busy of busyIntervals) {
+            const nextSegments: Array<{ start: number; end: number }> = [];
+            for (const seg of segments) {
+              const overlapStart = Math.max(seg.start, busy.start);
+              const overlapEnd = Math.min(seg.end, busy.end);
+              const overlaps = overlapStart < overlapEnd;
+              if (!overlaps) {
+                nextSegments.push(seg);
+              } else {
+                if (seg.start < overlapStart) nextSegments.push({ start: seg.start, end: overlapStart });
+                if (overlapEnd < seg.end) nextSegments.push({ start: overlapEnd, end: seg.end });
+              }
+            }
+            segments = nextSegments;
+            if (segments.length === 0) break;
+          }
+
+          if (segments.some(seg => seg.end - seg.start >= MIN_FREE_MINUTES)) {
+            hasFree = true;
+            break;
+          }
+        }
+
+        if (hasFree) {
+          status = hasBooked ? 'booked' : 'available';
         } else {
-          status = 'available';
+          status = 'full';
         }
       }
 
@@ -405,9 +477,14 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
 
   const fetchAvailability = async () => {
     try {
+      console.log('[Agenda] Fetching availability for companion:', companionId);
       const response = await fetch(`/api/companions/${companionId}/availability`, { cache: 'no-store' as any });
       if (response.ok) {
         const data = await response.json();
+        console.log('[Agenda] Availability received (count):', Array.isArray(data) ? data.length : 'n/a');
+        if (Array.isArray(data) && data.length > 0) {
+          console.log('[Agenda] First slot sample:', data[0]);
+        }
         setAvailability(data);
       }
     } catch (error) {
@@ -1200,25 +1277,25 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
                   className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-white"
                 >
                   <div className="flex items-center space-x-4">
-                    <div className={`w-3 h-3 rounded-full ${slot.isActive ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                    <div className={`w-3 h-3 rounded-full ${(slot.isActive ?? slot.is_active ?? true) ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                     <div>
                       <div className="flex items-center space-x-2">
                         {/* Mostrar día de la semana solo si no hay fechas específicas */}
-                        {(!slot.startDate && !slot.endDate) && (
+                        {(!(slot.startDate ?? slot.start_date) && !(slot.endDate ?? slot.end_date)) && (
                           <span className="font-medium text-gray-900">
-                            {daysOfWeek[slot.dayOfWeek]}
+                            {daysOfWeek[getSlotDayOfWeek(slot) ?? 0]}
                           </span>
                         )}
                         <span className="text-gray-600">
-                          {formatDisplayTime(slot.startTime)} - {formatDisplayTime(slot.endTime)}
+                          {formatDisplayTime(getSlotTime(slot, 'start'))} - {formatDisplayTime(getSlotTime(slot, 'end'))}
                         </span>
                       </div>
                       {/* Mostrar fechas específicas si existen */}
-                      {slot.startDate && slot.endDate && (
+                      {(slot.startDate ?? slot.start_date) && (slot.endDate ?? slot.end_date) && (
                         <div className="text-sm text-gray-500 mt-1">
-                          {slot.startDate === slot.endDate
-                            ? `Fecha: ${slot.startDate}`
-                            : `Período: ${slot.startDate} - ${slot.endDate}`
+                          {(slot.startDate ?? slot.start_date) === (slot.endDate ?? slot.end_date)
+                            ? `Fecha: ${slot.startDate ?? slot.start_date}`
+                            : `Período: ${(slot.startDate ?? slot.start_date)} - ${(slot.endDate ?? slot.end_date)}`
                           }
                         </div>
                       )}
