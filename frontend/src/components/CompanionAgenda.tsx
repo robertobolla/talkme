@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Users, Plus, X, ChevronLeft, ChevronRight, Video, MessageCircle, DollarSign, CheckCircle, XCircle, Trash2, RefreshCw } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useToast } from '@/hooks/useToast';
 import SessionCountdown from './SessionCountdown';
 import StatusBadge from './StatusBadge';
 import Link from 'next/link';
@@ -100,7 +101,8 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
     localStorage.removeItem(`notification_${companionId}`);
   };
 
-  const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
+  const { showSuccess, showError, showLoading, dismissLoading } = useToast();
+  const { notifications } = useNotifications();
 
   const daysOfWeek = [
     'Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'
@@ -222,10 +224,10 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
 
       // Obtener disponibilidad para este día
       const dayAvailability = availability.filter(slot => {
-        const isActive = slot.isActive ?? slot.is_active ?? true;
+        const isActive = slot.isActive ?? true;
         // Compatibilidad con ambos modelos: por fecha específica o por día de semana
-        const startDate = slot.startDate ?? slot.start_date ?? undefined;
-        const endDate = slot.endDate ?? slot.end_date ?? undefined;
+        const startDate = slot.startDate ?? undefined;
+        const endDate = slot.endDate ?? undefined;
         if (startDate && endDate) {
           const slotStart = parseLocalDate(startDate);
           const slotEnd = parseLocalDate(endDate);
@@ -1277,11 +1279,11 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
                   className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-white"
                 >
                   <div className="flex items-center space-x-4">
-                    <div className={`w-3 h-3 rounded-full ${(slot.isActive ?? slot.is_active ?? true) ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                    <div className={`w-3 h-3 rounded-full ${slot.isActive ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                     <div>
                       <div className="flex items-center space-x-2">
                         {/* Mostrar día de la semana solo si no hay fechas específicas */}
-                        {(!(slot.startDate ?? slot.start_date) && !(slot.endDate ?? slot.end_date)) && (
+                        {(!slot.startDate && !slot.endDate) && (
                           <span className="font-medium text-gray-900">
                             {daysOfWeek[getSlotDayOfWeek(slot) ?? 0]}
                           </span>
@@ -1291,11 +1293,11 @@ export default function CompanionAgenda({ companionId, userProfile }: CompanionA
                         </span>
                       </div>
                       {/* Mostrar fechas específicas si existen */}
-                      {(slot.startDate ?? slot.start_date) && (slot.endDate ?? slot.end_date) && (
+                      {slot.startDate && slot.endDate && (
                         <div className="text-sm text-gray-500 mt-1">
-                          {(slot.startDate ?? slot.start_date) === (slot.endDate ?? slot.end_date)
-                            ? `Fecha: ${slot.startDate ?? slot.start_date}`
-                            : `Período: ${(slot.startDate ?? slot.start_date)} - ${(slot.endDate ?? slot.end_date)}`
+                          {slot.startDate === slot.endDate
+                            ? `Fecha: ${slot.startDate}`
+                            : `Período: ${slot.startDate} - ${slot.endDate}`
                           }
                         </div>
                       )}

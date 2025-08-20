@@ -15,7 +15,7 @@ interface ProfileData {
   timezone: string;
   interests: string[];
   languages: string[];
-  profilePhoto?: File | null;
+  profilePhoto?: File | number | null;
   emergencyContact?: {
     name: string;
     phone: string;
@@ -27,6 +27,7 @@ export function useProfileStorage() {
   const { user } = useUser();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileId, setProfileId] = useState<number | null>(null);
 
   // Obtener perfil del localStorage
   const getLocalProfile = (): ProfileData | null => {
@@ -68,6 +69,7 @@ export function useProfileStorage() {
         const data = await response.json();
         if (data.data) {
           setProfile(data.data);
+          setProfileId(data.data.id); // Guardar el ID del perfil
           saveLocalProfile(data.data); // Sincronizar con localStorage como backup
           console.log('Perfil cargado desde Strapi:', data.data);
           return;
@@ -105,23 +107,68 @@ export function useProfileStorage() {
       // Mapear roles del frontend a los del backend
       const backendRole = profileData.role === 'client' ? 'user' : 'companion';
 
-      // Intentar guardar en el servidor
-      const response = await fetch('/api/onboarding/update-profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          role: backendRole,
-          profileData
-        }),
-      });
+      let response;
+
+      // Si tenemos un ID de perfil existente, usar el endpoint de actualización
+      if (profileId) {
+        console.log('Actualizando perfil existente con ID:', profileId);
+
+        // Preparar datos para Strapi (excluir campos que no están en el schema)
+        const strapiData: any = {
+          fullName: profileData.fullName,
+          phone: profileData.phone,
+          dateOfBirth: profileData.dateOfBirth,
+          address: profileData.address,
+          bio: profileData.bio,
+          hourlyRate: profileData.hourlyRate,
+          skills: profileData.skills,
+          workZones: profileData.workZones,
+          timezone: profileData.timezone,
+          interests: profileData.interests,
+          languages: profileData.languages,
+          emergencyContact: profileData.emergencyContact
+        };
+
+        // Adjuntar media si viene como id numérico
+        if (typeof profileData.profilePhoto === 'number') {
+          strapiData.profilePhoto = profileData.profilePhoto;
+        }
+
+        response = await fetch(`/api/user-profiles/${profileId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(strapiData),
+        });
+      } else {
+        // Si no hay ID, usar el endpoint de onboarding para crear nuevo perfil
+        console.log('Creando nuevo perfil');
+        response = await fetch('/api/onboarding/update-profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            role: backendRole,
+            profileData
+          }),
+        });
+      }
 
       if (response.ok) {
-        console.log('Perfil actualizado exitosamente en servidor');
+        const result = await response.json();
+        console.log('Perfil actualizado exitosamente en servidor:', result);
+
+        // Si es una actualización y no teníamos ID, guardarlo
+        if (profileId && result.data?.id) {
+          setProfileId(result.data.id);
+        }
+
         return true;
       } else {
-        console.warn('Error al guardar en servidor, pero guardado en localStorage');
+        const errorText = await response.text();
+        console.warn('Error al guardar en servidor:', response.status, errorText);
         return true; // Aún es exitoso porque se guardó localmente
       }
     } catch (error) {
@@ -138,6 +185,7 @@ export function useProfileStorage() {
     profile,
     loading,
     updateProfile,
-    loadProfile
+    loadProfile,
+    profileId
   };
 } 

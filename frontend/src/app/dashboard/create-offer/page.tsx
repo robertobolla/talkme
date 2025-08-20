@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Calendar, Clock, MapPin, DollarSign, AlertCircle } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useToast } from '@/hooks/useToast';
+import { useUser } from '@clerk/nextjs';
 
 interface OfferForm {
   title: string;
@@ -15,6 +17,7 @@ interface OfferForm {
 }
 
 export default function CreateOfferPage() {
+  const { user } = useUser();
   const router = useRouter();
   const [formData, setFormData] = useState<OfferForm>({
     title: '',
@@ -26,7 +29,8 @@ export default function CreateOfferPage() {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<OfferForm>>({});
-  const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
+  const { showSuccess, showError, showLoading, dismissLoading } = useToast();
+  const { notifications } = useNotifications();
 
   const handleInputChange = (field: keyof OfferForm, value: string | number) => {
     setFormData(prev => ({

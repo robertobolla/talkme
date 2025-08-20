@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Star, X } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useToast } from '@/hooks/useToast';
 
 interface RatingModalProps {
   isOpen: boolean;
@@ -23,7 +24,8 @@ export default function RatingModal({
   const [hoverRating, setHoverRating] = useState(0);
   const [review, setReview] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
+  const { showSuccess, showError, showLoading, dismissLoading } = useToast();
+  const { notifications } = useNotifications();
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -126,8 +128,8 @@ export default function RatingModal({
                 >
                   <Star
                     className={`w-8 h-8 transition-colors ${star <= (hoverRating || rating)
-                        ? 'text-yellow-400 fill-current'
-                        : 'text-gray-300'
+                      ? 'text-yellow-400 fill-current'
+                      : 'text-gray-300'
                       }`}
                   />
                 </button>

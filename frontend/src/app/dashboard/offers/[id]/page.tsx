@@ -20,6 +20,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import RatingModal from '@/components/RatingModal';
+import { useToast } from '@/hooks/useToast';
 
 interface Offer {
   id: number;
@@ -44,7 +45,8 @@ export default function OfferDetailPage() {
   const router = useRouter();
   const params = useParams();
   const offerId = params.id as string;
-  const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
+  const { showSuccess, showError, showLoading, dismissLoading } = useToast();
+  const { notifications } = useNotifications();
 
   const [offer, setOffer] = useState<Offer | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);

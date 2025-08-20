@@ -28,7 +28,8 @@ export async function GET(
 
         const data = await response.json();
         console.log('Sesiones del acompañante obtenidas:', data);
-        return NextResponse.json(data.data || []);
+        // Devolver en el formato que espera el dashboard
+        return NextResponse.json({ data: data.data || [] });
     } catch (error) {
         console.error('Error fetching companion sessions:', error);
         return NextResponse.json(

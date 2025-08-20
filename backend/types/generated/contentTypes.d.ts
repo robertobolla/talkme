@@ -486,6 +486,49 @@ export interface ApiDashboardDashboard extends Struct.SingleTypeSchema {
   };
 }
 
+export interface ApiNotificationNotification
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'notifications';
+  info: {
+    description: 'Sistema de notificaciones para usuarios';
+    displayName: 'Notification';
+    pluralName: 'notifications';
+    singularName: 'notification';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    archivedAt: Schema.Attribute.DateTime;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::notification.notification'
+    > &
+      Schema.Attribute.Private;
+    message: Schema.Attribute.Text & Schema.Attribute.Required;
+    metadata: Schema.Attribute.JSON;
+    priority: Schema.Attribute.String & Schema.Attribute.DefaultTo<'medium'>;
+    publishedAt: Schema.Attribute.DateTime;
+    readAt: Schema.Attribute.DateTime;
+    recipientId: Schema.Attribute.String & Schema.Attribute.Required;
+    senderId: Schema.Attribute.String;
+    status: Schema.Attribute.String & Schema.Attribute.DefaultTo<'unread'>;
+    title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    type: Schema.Attribute.String & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiOfertaOferta extends Struct.CollectionTypeSchema {
   collectionName: 'ofertas';
   info: {
@@ -771,6 +814,39 @@ export interface ApiSessionSession extends Struct.CollectionTypeSchema {
       'manyToOne',
       'api::user-profile.user-profile'
     >;
+  };
+}
+
+export interface ApiSimpleNotificationSimpleNotification
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'simple_notifications';
+  info: {
+    description: 'Sistema de notificaciones simple para usuarios';
+    displayName: 'Simple Notification';
+    pluralName: 'simple-notifications';
+    singularName: 'simple-notification';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::simple-notification.simple-notification'
+    > &
+      Schema.Attribute.Private;
+    message: Schema.Attribute.Text & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.String & Schema.Attribute.DefaultTo<'unread'>;
+    title: Schema.Attribute.String & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userId: Schema.Attribute.String & Schema.Attribute.Required;
   };
 }
 
@@ -1418,10 +1494,12 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::availability-slot.availability-slot': ApiAvailabilitySlotAvailabilitySlot;
       'api::dashboard.dashboard': ApiDashboardDashboard;
+      'api::notification.notification': ApiNotificationNotification;
       'api::oferta.oferta': ApiOfertaOferta;
       'api::payment.payment': ApiPaymentPayment;
       'api::review.review': ApiReviewReview;
       'api::session.session': ApiSessionSession;
+      'api::simple-notification.simple-notification': ApiSimpleNotificationSimpleNotification;
       'api::user-profile.user-profile': ApiUserProfileUserProfile;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;

@@ -24,16 +24,26 @@ export async function GET(request: NextRequest) {
         console.log('Companions from user-profiles:', data);
 
         // Transformar los datos para que coincidan con el formato esperado
-        const companions = data.data?.map((profile: any) => ({
-            id: profile.id,
-            fullName: profile.fullName,
-            hourlyRate: profile.hourlyRate || 0,
-            specialties: profile.specialties || [],
-            languages: profile.languages || [],
-            bio: profile.bio || '',
-            averageRating: profile.averageRating || 0,
-            isOnline: profile.isOnline || false
-        })) || [];
+        const companions = data.data?.map((profile: any) => {
+            const STRAPI_URL = process.env.STRAPI_URL || 'http://localhost:1337';
+            const media = profile.profilePhoto || profile.profile_photo || null;
+            const rawUrl = media?.url || null;
+            const photoUrl = rawUrl
+                ? (rawUrl.startsWith('http') ? rawUrl : `${STRAPI_URL}${rawUrl}`)
+                : null;
+
+            return {
+                id: profile.id,
+                fullName: profile.fullName,
+                hourlyRate: profile.hourlyRate || 0,
+                specialties: profile.specialties || [],
+                languages: profile.languages || [],
+                bio: profile.bio || '',
+                averageRating: profile.averageRating || 0,
+                isOnline: profile.isOnline || false,
+                photoUrl,
+            };
+        }) || [];
 
         console.log('Transformed companions:', companions);
         return NextResponse.json(companions);

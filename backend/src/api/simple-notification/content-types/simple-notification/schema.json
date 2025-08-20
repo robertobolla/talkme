@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "simple_notifications",
+  "info": {
+    "singularName": "simple-notification",
+    "pluralName": "simple-notifications",
+    "displayName": "Simple Notification",
+    "description": "Sistema de notificaciones simple para usuarios"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "message": {
+      "type": "text",
+      "required": true
+    },
+    "userId": {
+      "type": "string",
+      "required": true
+    },
+    "status": {
+      "type": "string",
+      "default": "unread"
+    },
+    "createdAt": {
+      "type": "datetime"
+    }
+  }
+} 

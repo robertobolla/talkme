@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { useProfileStorage } from '@/hooks/useProfileStorage';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useToast } from '@/hooks/useToast';
 import {
   User, Mail, Phone, Calendar, MapPin, DollarSign,
   Save, ArrowLeft, CheckCircle
@@ -23,7 +24,7 @@ interface ProfileData {
   timezone: string;
   interests: string[];
   languages: string[];
-  profilePhoto?: File | null;
+  profilePhoto?: File | number | null;
   emergencyContact?: {
     name: string;
     phone: string;
@@ -42,7 +43,8 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const { showSuccess, showError, showLoading, dismissLoading } = useNotifications();
+  const { showSuccess, showError, showLoading, dismissLoading } = useToast();
+  const { notifications } = useNotifications();
 
   const [profileData, setProfileData] = useState<ProfileData>({
     fullName: '',
@@ -117,7 +119,13 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
 
       // Manejar foto de perfil existente
       if (profile.profilePhoto && typeof profile.profilePhoto === 'object' && 'url' in profile.profilePhoto) {
-        const photoUrl = `http://localhost:1337${profile.profilePhoto.url}`;
+        // Usar la URL completa si ya viene del backend, o construirla si es relativa
+        let photoUrl = (profile.profilePhoto as any).url;
+        if (photoUrl && typeof photoUrl === 'string' && !photoUrl.startsWith('http')) {
+          // Si es una URL relativa, construir la URL completa
+          const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'http://localhost:1337';
+          photoUrl = `${strapiUrl}${photoUrl}`;
+        }
         setExistingPhotoUrl(photoUrl);
       }
 
@@ -295,7 +303,7 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
       let photoFileId = null;
 
       // Si hay una foto de perfil, subirla primero
-      if (profileData.profilePhoto) {
+      if (profileData.profilePhoto && profileData.profilePhoto instanceof File) {
         console.log('Iniciando upload de foto de perfil...');
         console.log('Archivo a subir:', profileData.profilePhoto.name, profileData.profilePhoto.size, 'bytes');
 
@@ -333,7 +341,8 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
       const profileDataWithClerkEmail = {
         ...profileData,
         email: user?.emailAddresses?.[0]?.emailAddress || user?.primaryEmailAddress?.emailAddress || profileData.email,
-        profilePhoto: photoFileId // Reemplazar el archivo con el ID del archivo subido
+        // Si se subió una nueva foto, usar la URL completa; si no, mantener la existente
+        profilePhoto: photoFileId ? photoFileId : existingPhotoUrl
       };
 
       const success = await updateProfile({
@@ -495,7 +504,7 @@ export default function ProfileForm({ role, isEditing = false }: { role: 'client
         </label>
         <div className="flex items-center space-x-4">
           <div className="relative">
-            {profileData.profilePhoto ? (
+            {profileData.profilePhoto && profileData.profilePhoto instanceof File ? (
               <div className="relative">
                 <img
                   src={URL.createObjectURL(profileData.profilePhoto)}

@@ -1,0 +1,53 @@
+{
+  "kind": "collectionType",
+  "collectionName": "notifications",
+  "info": {
+    "singularName": "notification",
+    "pluralName": "notifications",
+    "displayName": "Notification",
+    "description": "Sistema de notificaciones para usuarios"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 255
+    },
+    "message": {
+      "type": "text",
+      "required": true
+    },
+    "type": {
+      "type": "string",
+      "required": true
+    },
+    "status": {
+      "type": "string",
+      "default": "unread"
+    },
+    "priority": {
+      "type": "string",
+      "default": "medium"
+    },
+    "recipientId": {
+      "type": "string",
+      "required": true
+    },
+    "senderId": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "readAt": {
+      "type": "datetime"
+    },
+    "archivedAt": {
+      "type": "datetime"
+    }
+  }
+}

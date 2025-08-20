@@ -90,6 +90,17 @@ module.exports = async ({ strapi }) => {
               },
             },
           },
+          'api::simple-notification.simple-notification': {
+            controllers: {
+              'api::simple-notification.simple-notification': {
+                find: { enabled: true, policy: '' },
+                findOne: { enabled: true, policy: '' },
+                create: { enabled: true, policy: '' },
+                update: { enabled: true, policy: '' },
+                delete: { enabled: true, policy: '' },
+              },
+            },
+          },
         },
       },
     });

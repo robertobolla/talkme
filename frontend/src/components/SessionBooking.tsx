@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Users, DollarSign, Heart, MessageCircle, Video } from 'lucide-react';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useToast } from '@/hooks/useToast';
 
 interface Companion {
   id: number;
@@ -30,7 +30,7 @@ interface BookingStep {
 }
 
 export default function SessionBooking({ companions, userProfile, onSessionCreated }: SessionBookingProps) {
-  const { showSuccess, showError, showInfo, showLoading, dismissLoading } = useNotifications();
+  const { showSuccess, showError, showLoading, dismissLoading } = useToast();
   const [currentStep, setCurrentStep] = useState<BookingStep>({ step: 'search' });
   const [filters, setFilters] = useState({
     gender: '',
@@ -624,7 +624,7 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
       day: 'numeric'
     });
 
-    showInfo(
+    showSuccess(
       `🎉 ¡Solicitud de reserva enviada exitosamente!\n\n` +
       `📋 Detalles de tu solicitud:\n` +
       `👤 Acompañante: ${companionName}\n` +
@@ -665,7 +665,8 @@ export default function SessionBooking({ companions, userProfile, onSessionCreat
         duration: currentStep.selectedDuration || 15,
         sessionType: currentStep.selectedType || 'video',
         specialty: 'general',
-        notes: `Sesión de videochat con ${currentStep.selectedCompanion.fullName}`
+        notes: `Sesión de videochat con ${currentStep.selectedCompanion.fullName}`,
+        status: 'pending' // Estado pendiente para que el acompañante pueda confirmar
       };
 
       console.log('=== CREATING SESSION ===');

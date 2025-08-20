@@ -1,4 +1,5 @@
-import type { Core } from '@strapi/strapi';
+import type { Strapi } from '@strapi/strapi';
+import setupPublicPermissions from './scripts/setup-public-permissions';
 
 export default {
   /**
@@ -16,9 +17,16 @@ export default {
    * This gives you an opportunity to set up your data model,
    * run jobs, or perform some special logic.
    */
-  bootstrap(/*{ strapi }*/) {
+  async bootstrap({ strapi }: { strapi: Strapi }) {
     // Configurar permisos públicos para desarrollo
     console.log('🔧 Configurando permisos públicos para desarrollo...');
+
+    try {
+      await setupPublicPermissions({ strapi });
+      console.log('✅ Permisos públicos configurados exitosamente');
+    } catch (error) {
+      console.error('❌ Error configurando permisos públicos:', error);
+    }
 
     // Nota: En producción, esto debería configurarse manualmente en el admin
     // o usar un script de migración más robusto

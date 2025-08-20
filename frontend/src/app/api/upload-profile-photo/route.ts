@@ -35,22 +35,28 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Verificar variables de entorno
+    if (!process.env.STRAPI_URL || !process.env.STRAPI_API_TOKEN) {
+      console.error('Variables de entorno no configuradas');
+      return NextResponse.json(
+        { error: 'Configuración del servidor incompleta' },
+        { status: 500 }
+      );
+    }
+
     // Crear FormData para enviar a Strapi
     const strapiFormData = new FormData();
     strapiFormData.append('files', file);
 
-    // Subir archivo a Strapi
-    const strapiToken = '7542f3245bc3cedf9b9d646d3a8a028f8f6b8db0ccbf7ca5163a7bb977a7697f43f60ed0ea3926eff5a163243188ef475b3a985a106acdd69afe7e1fe6a1cff4d9b2fae167f8d5408f20ed7358f0fad5266a7fa968440fb23e5a0edde2f5875b2988289d6538ae57c1b4d2169fa3c6f91758640814fba94dddab158d0d8609ac';
-
-    console.log('Token de Strapi:', strapiToken ? 'Configurado' : 'No configurado');
-    console.log('URL de Strapi:', 'http://localhost:1337/api/upload');
+    console.log('Token de Strapi:', process.env.STRAPI_API_TOKEN ? 'Configurado' : 'No configurado');
+    console.log('URL de Strapi:', `${process.env.STRAPI_URL}/api/upload`);
     console.log('FormData creado con archivo:', file.name, file.size, 'bytes');
 
     try {
-      const uploadResponse = await fetch('http://localhost:1337/api/upload', {
+      const uploadResponse = await fetch(`${process.env.STRAPI_URL}/api/upload`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${strapiToken}`,
+          'Authorization': `Bearer ${process.env.STRAPI_API_TOKEN}`,
         },
         body: strapiFormData,
       });
@@ -69,10 +75,14 @@ export async function POST(request: NextRequest) {
 
       console.log('Archivo subido exitosamente:', uploadedFile.id);
 
+      // Construir URL completa para la imagen
+      const imageUrl = `${process.env.STRAPI_URL}${uploadedFile.url}`;
+      console.log('URL completa de la imagen:', imageUrl);
+
       return NextResponse.json({
         success: true,
         fileId: uploadedFile.id,
-        url: uploadedFile.url
+        url: imageUrl
       });
 
     } catch (fetchError) {

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Heart, CheckCircle, ArrowRight } from 'lucide-react';
+import { Users, User, Heart, CheckCircle, ArrowRight } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useToast } from '@/hooks/useToast';
 
 interface RoleOption {
   id: 'user' | 'companion';
@@ -44,39 +45,40 @@ const roleOptions: RoleOption[] = [
 ];
 
 interface RoleSelectionProps {
-  onRoleSelect?: (role: 'user' | 'companion') => void;
+  onRoleSelected?: (role: 'user' | 'companion') => void;
 }
 
-export default function RoleSelection({ onRoleSelect }: RoleSelectionProps) {
+export default function RoleSelection({ onRoleSelected }: RoleSelectionProps) {
   const [selectedRole, setSelectedRole] = useState<'user' | 'companion' | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
-  const { showError, showLoading, dismissLoading } = useNotifications();
+  const { showError, showLoading, dismissLoading } = useToast();
+  const { notifications } = useNotifications();
 
   const handleRoleSelection = async (role: 'user' | 'companion') => {
     console.log('=== RoleSelection: Iniciando selección de rol ===');
     console.log('Rol seleccionado:', role);
 
     setSelectedRole(role);
-    setIsLoading(true);
+    setIsSubmitting(true);
     const loadingToast = showLoading('Seleccionando rol...');
 
     try {
-      if (onRoleSelect) {
-        console.log('RoleSelection: Usando callback onRoleSelect');
+      if (onRoleSelected) {
+        console.log('RoleSelection: Usando callback onRoleSelected');
         try {
-          await onRoleSelect(role);
+          await onRoleSelected(role);
           console.log('RoleSelection: Callback completado exitosamente');
           dismissLoading(loadingToast);
         } catch (callbackError) {
-          console.error('RoleSelection: Error en callback onRoleSelect:', callbackError);
+          console.error('RoleSelection: Error en callback onRoleSelected:', callbackError);
           const errorMessage = callbackError instanceof Error ? callbackError.message : 'Error al seleccionar rol';
           dismissLoading(loadingToast);
           showError(errorMessage);
           return; // No re-lanzar el error
         }
       } else {
-        console.error('RoleSelection: No hay callback onRoleSelect disponible');
+        console.error('RoleSelection: No hay callback onRoleSelected disponible');
         dismissLoading(loadingToast);
         showError('Error: No hay callback disponible');
       }
@@ -87,7 +89,7 @@ export default function RoleSelection({ onRoleSelect }: RoleSelectionProps) {
       showError(errorMessage);
       console.error('RoleSelection: Error message:', errorMessage);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -154,13 +156,13 @@ export default function RoleSelection({ onRoleSelect }: RoleSelectionProps) {
         <div className="text-center">
           <button
             onClick={() => selectedRole && handleRoleSelection(selectedRole)}
-            disabled={!selectedRole || isLoading}
+            disabled={!selectedRole || isSubmitting}
             className={`
               px-8 py-3 bg-blue-600 text-white rounded-lg font-medium flex items-center mx-auto
-              ${selectedRole && !isLoading ? 'hover:bg-blue-700' : 'opacity-50 cursor-not-allowed'}
+              ${selectedRole && !isSubmitting ? 'hover:bg-blue-700' : 'opacity-50 cursor-not-allowed'}
             `}
           >
-            {isLoading ? (
+            {isSubmitting ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Procesando...
